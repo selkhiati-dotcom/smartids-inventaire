@@ -1,6 +1,6 @@
 {
   "name": "smartids-inventaire",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Application d'inventaire par scan (PDA / telephone) - SmartIDS / Boatshop",
   "scripts": {
@@ -11,6 +11,7 @@
     "build:aab": "cd android && ./gradlew bundleRelease"
   },
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^6.2.0",
     "@capacitor/android": "^6.1.2",
     "@capacitor/app": "^6.0.1",
     "@capacitor/core": "^6.1.2",

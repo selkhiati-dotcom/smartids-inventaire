@@ -12,7 +12,7 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.2.0';
+var APP_VERSION = '1.2.1';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
 /* Compat vieux WebView (PDA) : NodeList n'a pas de .forEach avant Chrome 51 */
@@ -311,7 +311,8 @@ function startFromSaved(sv){
   S.index=IC.buildIndex(S.rows,S.barcodeKey).idx; undoStack=[]; recents=[]; goScan();
 }
 function goScan(){ $('screenImport').classList.add('hide'); $('screenScan').classList.remove('hide');
-  if('BarcodeDetector' in window) $('btnCam').classList.remove('hide'); applySettingsUI(); updateOpUI(); updateLocBar(); render(); focusScan(); }
+  if((window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BarcodeScanner) || 'BarcodeDetector' in window) $('btnCam').classList.remove('hide');
+  applySettingsUI(); updateOpUI(); updateLocBar(); render(); focusScan(); }
 function updateOpUI(){ var el=$('sOp'); if(el) el.textContent=(S&&S.operator)?S.operator:'—'; }
 
 /* ---------- Clavier / scanner ----------
@@ -523,15 +524,44 @@ function shareBackup(){
   });
 }
 
-/* ---------- Camera (secours ; le scanner PDA marche en mode clavier) ---------- */
+/* ---------- Camera ----------
+   Telephone : scanner NATIF Google ML Kit (plugin @capacitor-mlkit/barcode-scanning,
+   methode scan() = Google code scanner : aucune permission camera a gerer, UI plein
+   ecran fournie par Play Services, tres fiable). Relance automatique apres chaque code
+   (scan en continu) jusqu'a annulation par l'utilisateur.
+   Secours web (BarcodeDetector + getUserMedia) pour les appareils sans Play Services. */
+var MLScan = PL.BarcodeScanner;
+function isNative(){ try{ return typeof CAP.isNativePlatform==='function' ? CAP.isNativePlatform() : !!CAP.isNative; }catch(e){ return false; } }
+var mlLoop=false;
+function mlScanLoop(){
+  MLScan.scan().then(function(r){
+    var codes=(r && r.barcodes) || [];
+    if(codes.length){
+      var v=codes[0].rawValue || codes[0].displayValue || '';
+      if(v) processScan(String(v));
+      if(mlLoop) setTimeout(mlScanLoop, 300);   /* scan suivant */
+    } else { mlLoop=false; }
+  })['catch'](function(err){
+    mlLoop=false;
+    var msg=String((err && err.message) || err || '');
+    if(/module/i.test(msg) && MLScan.installGoogleBarcodeScannerModule){
+      toast('Installation du module de scan Google… reessaie dans quelques secondes');
+      MLScan.installGoogleBarcodeScannerModule()['catch'](function(){});
+    } else if(!/cancel/i.test(msg)){ toast('Scanner indisponible : '+msg.slice(0,60)); }
+  });
+}
+function camStart(){
+  if(MLScan && isNative()){ if(mlLoop) return; mlLoop=true; mlScanLoop(); return; }
+  camStartWeb();
+}
 var camStream=null, camRun=false, det=null;
-function camStart(){ if(!('BarcodeDetector' in window)) return;
+function camStartWeb(){ if(!('BarcodeDetector' in window)) return;
   det=new window.BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf','codabar']});
   $('camWrap').classList.remove('hide');
   navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(st){ camStream=st; var v=$('cam'); v.srcObject=st; v.play(); camRun=true; loop(); })
     .catch(function(){ toast('Camera refusee'); $('camWrap').classList.add('hide'); });
   function loop(){ if(!camRun) return; det.detect($('cam')).then(function(codes){ if(codes&&codes.length){ var c=codes[0].rawValue, now=Date.now(); if(!(c===lastScan.code && now-lastScan.t<1200)){ lastScan={code:c,t:now}; processScan(c); } } }).catch(function(){}).then(function(){ if(camRun) requestAnimationFrame(loop); }); } }
-function camStop(){ camRun=false; if(camStream){ camStream.getTracks().forEach(function(t){t.stop();}); camStream=null;} $('camWrap').classList.add('hide'); focusScan(); }
+function camStop(){ mlLoop=false; camRun=false; if(camStream){ each(camStream.getTracks(),function(t){t.stop();}); camStream=null;} $('camWrap').classList.add('hide'); focusScan(); }
 
 /* ---------- Menu / reglages ---------- */
 function openMenu(){ $('mnuVer').textContent='SmartIDS Inventaire v'+APP_VERSION; $('menu').classList.remove('hide'); }

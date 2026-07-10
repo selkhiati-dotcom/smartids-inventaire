@@ -45,7 +45,10 @@ un moteur JavaScript déjà éprouvé par des tests.
   (code-barres préfixé `LOC-`, ex `LOC-A-03-B`) qui devient l'emplacement courant, puis les produits
   scannés s'y rattachent. Voir `parseLocationCode` / `setProductLocation` dans `inv_core.js`.
 - **Scan** : PDA = lecteur laser en mode clavier (aucune config, frappes capturées globalement,
-  voir point « Scan / clavier » ci-dessus). Téléphone = bouton Caméra (BarcodeDetector).
+  voir point « Scan / clavier » ci-dessus). Téléphone = bouton Caméra → scanner natif Google
+  ML Kit (`@capacitor-mlkit/barcode-scanning`, méthode `scan()` = Google code scanner, aucune
+  permission caméra requise, relancé en continu) ; secours web BarcodeDetector si pas de
+  Play Services.
 
 ## Structure
 

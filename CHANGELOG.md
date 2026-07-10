@@ -4,6 +4,16 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.2.1] — 2026-07-10
+
+### Corrigé
+- **Caméra sur smartphone** : la caméra web ne marchait pas (permission Android absente du
+  manifest + `BarcodeDetector` capricieux selon les téléphones). Le bouton 📷 utilise
+  désormais le **scanner natif Google ML Kit** (`@capacitor-mlkit/barcode-scanning`,
+  Google code scanner) : UI plein écran de Play Services, aucune permission caméra à
+  demander, reconnaissance fiable, **scan en continu** (se relance après chaque code,
+  jusqu'à annulation). L'ancien chemin web reste en secours (appareils sans Play Services).
+
 ## [1.2.0] — 2026-07-10
 
 Refonte performance de l'écran de scan (suggestion utilisateur) : sur PDA, l'app devenait
