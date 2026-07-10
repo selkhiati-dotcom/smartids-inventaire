@@ -59,3 +59,4 @@
   .overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#000a;z-index:30;display:flex;align-items:flex-end;justify-content:center;padding:12px}
   .sheet{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;width:100%;max-width:520px;max-height:85vh;overflow:auto}
   .sheet .btn{margin-top:8px;padding:13px;font-size:15px}
+  #diagLog{font-family:Consolas,Menlo,monospace;font-size:11px;line-height:1.5;max-height:38vh;overflow:auto;background:#0e1117;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px;word-break:break-all}

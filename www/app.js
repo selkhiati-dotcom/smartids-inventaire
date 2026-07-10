@@ -12,7 +12,7 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.1.3';
+var APP_VERSION = '1.1.4';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
 /* Compat vieux WebView (PDA) : NodeList n'a pas de .forEach avant Chrome 51 */
@@ -42,12 +42,17 @@ var SNAP_SUB = 'SmartIDS/backups';
 var SNAP_EVERY_MS = 10*60*1000;
 
 /* ---------- Reglages (persistes, independants de l'inventaire) ---------- */
-var SET = { locEnabled:true, autoAdd:true, lastOp:'' };
+/* scanMode : 'field' = lecteur qui INSERE le texte dans le champ focalise (defaut,
+   cas des PDA en wedge standard) ; 'keys' = lecteur configure pour emettre de vraies
+   touches ("Wedge as keys" Honeywell / DataWedge Zebra) — aucun champ focalise requis,
+   c'est le mode le plus fiable. */
+var SET = { locEnabled:true, autoAdd:true, lastOp:'', scanMode:'field' };
 function settingsLoad(){
   function apply(o){ if(o && typeof o==='object'){
     if(typeof o.locEnabled==='boolean') SET.locEnabled=o.locEnabled;
     if(typeof o.autoAdd==='boolean') SET.autoAdd=o.autoAdd;
-    if(typeof o.lastOp==='string') SET.lastOp=o.lastOp; } }
+    if(typeof o.lastOp==='string') SET.lastOp=o.lastOp;
+    if(o.scanMode==='keys'||o.scanMode==='field') SET.scanMode=o.scanMode; } }
   if(FS){
     return FS.readFile({ path:SETTINGS_FILE, directory:DIR_DATA, encoding:ENC })
       .then(function(r){ try{ apply(JSON.parse(typeof r.data==='string'?r.data:'')); }catch(e){} })
@@ -309,14 +314,21 @@ function updateOpUI(){ var el=$('sOp'); if(el) el.textContent=(S&&S.operator)?S.
    pour les WebView recents. Le champ n'est PAS readonly (ca bloquerait l'insertion IME). */
 var kbManual=false;
 var KBP = PL.Keyboard;
+/* ANTI-TEMPETE : ne jamais boucler show->hide->show (ca sature le thread natif et fige
+   le tactile — constate sur PDA Honeywell). On ferme le clavier UNE fois ; s'il revient
+   dans les 2,5 s, on le laisse visible plutot que de geler l'ecran. */
+var kbHideLast=0;
 if(KBP && KBP.addListener){
   KBP.addListener('keyboardDidShow', function(){
     if(kbManual || !KBP.hide) return;
-    /* Ne masquer le clavier QUE pour le champ scan en mode lecteur. Tous les autres
-       champs (operateur, recherche, reglages, emplacement...) y ont droit. */
+    if(SET.scanMode!=='field') return;
     if(!S || $('screenScan').classList.contains('hide')) return;
+    if(!$('diag').classList.contains('hide')) return;
     var ae=document.activeElement||{}, tag=(ae.tagName||'').toLowerCase();
     if((tag==='input'||tag==='textarea'||tag==='select') && ae.id!=='scan') return;
+    var now=Date.now();
+    if(now-kbHideLast<2500) return;
+    kbHideLast=now;
     KBP.hide()['catch'](function(){});
   });
 }
@@ -338,6 +350,7 @@ function wedgeCapture(e){
   var t=e.target||{}, tag=(t.tagName||'').toLowerCase();
   if(t.id==='search') return;
   if((tag==='input'||tag==='select'||tag==='textarea') && t.id!=='scan') return;
+  if(!$('diag').classList.contains('hide')) return;
   if(e.key==='Enter'||e.key==='Tab'){
     if(scanBuf){ e.preventDefault(); e.stopPropagation(); var v=scanBuf; bufReset(); $('scan').value=''; processScan(v); }
     return;
@@ -348,8 +361,11 @@ function wedgeCapture(e){
   }
 }
 document.addEventListener('keydown', wedgeCapture, true);
-function focusScan(){ if(kbManual) return; var el=$('scan');
-  if(el && !$('screenScan').classList.contains('hide') && $('camWrap').classList.contains('hide')){ try{ el.focus(); }catch(e){} } }
+/* Focus du champ scan : uniquement en mode 'field' (insertion IME). En mode 'keys',
+   AUCUN focus — la capture globale suffit et on ne reveille jamais le clavier. */
+function focusScan(){ if(kbManual || SET.scanMode!=='field') return; var el=$('scan');
+  if(el && !$('screenScan').classList.contains('hide') && $('camWrap').classList.contains('hide')
+     && document.activeElement!==el){ try{ el.focus(); }catch(e){} } }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function setFB(kind,big,sub){ var f=$('fb'); f.className=''; if(kind)f.classList.add(kind); f.innerHTML='<div class="big">'+big+'</div><div class="sub">'+(sub||'')+'</div>'; }
 function updateLocBar(){ var el=$('curLoc'); if(el){ el.textContent=S.curLoc?S.curLoc:'— aucun —'; el.style.color=S.curLoc?'var(--loc)':'var(--mut)'; } }
@@ -423,9 +439,10 @@ function updateRow(i){ var qel=$('q'+i); if(qel){ qel.textContent=S.counts[i]||0
 /* ---------- Reglages : application a l'interface ---------- */
 function applySettingsUI(){
   var on=SET.locEnabled;
-  ['locbarWrap','sLocWrap','detLocRow','btnExpLoc'].forEach(function(id){ var el=$(id); if(el) el.classList.toggle('hide',!on); });
+  each(['locbarWrap','sLocWrap','detLocRow','btnExpLoc'],function(id){ var el=$(id); if(el) el.classList.toggle('hide',!on); });
   var sl=$('setLoc'); if(sl) sl.checked=on;
   var sa=$('setAuto'); if(sa) sa.checked=SET.autoAdd;
+  var sm=$('setScanMode'); if(sm) sm.value=SET.scanMode;
 }
 
 /* ---------- Exports (ecriture FICHIER + partage) ---------- */
@@ -548,17 +565,45 @@ $('setAuto').addEventListener('change',function(){ SET.autoAdd=this.checked; set
 $('setOp').addEventListener('change',function(){ var op=this.value.trim(); if(!op) return;
   SET.lastOp=op; settingsSave();
   if(S && op!==S.operator){ S.operator=op; jlog({k:'op',l:op}); updateOpUI(); saveSoon(); toast('Operateur : '+op); } });
-/* Re-focus doux du champ scan (necessaire au chemin IME des vieux PDA) : uniquement
-   sur tap d'une zone NON interactive, jamais de boucle blur->focus (ca avalait les
-   taps sur les boutons en v1.1.0). Le clavier virtuel est masque nativement. */
-document.addEventListener('click',function(e){ if(!S || kbManual) return;
+$('setScanMode').addEventListener('change',function(){ SET.scanMode=this.value; settingsSave();
+  if(SET.scanMode==='keys'){ try{ $('scan').blur(); }catch(e){} } else { focusScan(); }
+  toast(SET.scanMode==='keys'?'Mode touches clavier (Wedge as keys)':'Mode champ focalise'); });
+$('btnDiag').addEventListener('click',openDiag);
+$('diagClose').addEventListener('click',closeDiag);
+$('diagClear').addEventListener('click',function(){ $('diagLog').innerHTML=''; });
+/* Re-focus doux du champ scan (chemin IME, mode 'field' seulement) : sur tap d'une
+   zone NON interactive, throttle 800 ms, jamais de boucle blur->focus. */
+var refocusLast=0;
+document.addEventListener('click',function(e){ if(!S || kbManual || SET.scanMode!=='field') return;
   if($('screenScan').classList.contains('hide')) return;
   if(!$('camWrap').classList.contains('hide')) return;
-  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide')) return;
+  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide') || !$('diag').classList.contains('hide')) return;
   var tag=(e.target.tagName||'').toLowerCase();
   if(tag==='input'||tag==='button'||tag==='select'||tag==='a'||tag==='video'||tag==='label') return;
+  var now=Date.now(); if(now-refocusLast<800) return; refocusLast=now;
   setTimeout(focusScan,0); });
 $('scan').addEventListener('blur',function(){ if(kbManual) setKbMode(false); });
+
+/* ---------- Diagnostic scan (Reglages -> 🔧) : journal en direct de TOUT ce que le
+   lecteur emet (touches, insertions, focus, clavier) pour diagnostiquer un PDA. ---------- */
+var diagOn=false;
+function dlog(s){ if(!diagOn) return; var el=$('diagLog'); if(!el) return;
+  var d=new Date(); function p(n){return(n<10?'0':'')+n;}
+  el.innerHTML+=p(d.getMinutes())+':'+p(d.getSeconds())+'.'+Math.floor(d.getMilliseconds()/100)+' '+esc(s)+'<br>';
+  el.scrollTop=el.scrollHeight; }
+each(['keydown','keyup'],function(t){ document.addEventListener(t,function(e){
+  dlog(t+' key='+(e.key===undefined?'(indefini)':e.key)+' code='+e.keyCode); },true); });
+document.addEventListener('keypress',function(e){ dlog('keypress code='+e.keyCode); },true);
+document.addEventListener('input',function(e){ var t=e.target||{};
+  dlog('input #'+(t.id||t.tagName)+' = "'+String(t.value||'').slice(-30)+'"'); },true);
+document.addEventListener('focusin',function(e){ dlog('focus -> #'+((e.target||{}).id||(e.target||{}).tagName)); },true);
+document.addEventListener('focusout',function(e){ dlog('blur  <- #'+((e.target||{}).id||(e.target||{}).tagName)); },true);
+if(KBP && KBP.addListener){ each(['keyboardWillShow','keyboardDidShow','keyboardWillHide','keyboardDidHide'],function(ev){
+  KBP.addListener(ev,function(){ dlog('[clavier] '+ev); }); }); }
+function openDiag(){ $('settings').classList.add('hide'); diagOn=true; $('diagLog').innerHTML='';
+  $('diag').classList.remove('hide'); dlog('diagnostic demarre v'+APP_VERSION+' — scanne dans le champ ci-dessus');
+  setTimeout(function(){ try{ $('diagIn').value=''; $('diagIn').focus(); }catch(e){} },100); }
+function closeDiag(){ diagOn=false; $('diag').classList.add('hide'); }
 
 /* Filets de securite: sauvegarde immediate quand l'app passe en arriere-plan / se ferme */
 window.addEventListener('pagehide', function(){ flushSave(); });

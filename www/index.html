@@ -128,10 +128,34 @@
     <input id="setOp" autocomplete="off" placeholder="Prénom / nom">
     <div class="chk"><input type="checkbox" id="setLoc"><label for="setLoc" style="margin:0">Gestion des <b>emplacements</b> (étiquettes LOC-…)</label></div>
     <div class="chk"><input type="checkbox" id="setAuto"><label for="setAuto" style="margin:0">Ajouter <b>automatiquement</b> les codes absents du fichier</label></div>
+    <label>Mode lecteur code-barres</label>
+    <select id="setScanMode">
+      <option value="field">Champ focalisé — lecteur qui « tape » dans le champ (défaut)</option>
+      <option value="keys">Touches clavier — recommandé avec « Wedge as keys » (Honeywell)</option>
+    </select>
+    <p class="muted">Si le tactile se fige ou que le clavier s'ouvre sans arrêt pendant le scan :
+      sur le PDA, active <b>Wedge as keys</b> (Paramètres → Honeywell Settings → Scanning →
+      Internal Scanner → Default profile → Data Processing Settings), puis choisis
+      « Touches clavier » ci-dessus. Le bouton 🔧 ci-dessous montre en direct ce que le
+      lecteur envoie.</p>
+    <button class="btn ghost" id="btnDiag">🔧 Diagnostic scan</button>
     <p class="muted">Sauvegarde continue : chaque scan est journalisé puis écrit dans un fichier local
       (+ copie <b>Documents/SmartIDS</b> et instantanés dans <b>Documents/SmartIDS/backups</b>).
       Le bouton ☁ Sauvegarder du menu permet d'envoyer une copie vers Google Drive, un mail, etc.</p>
     <button class="btn" id="setClose">OK</button>
+  </div>
+</div>
+
+<!-- DIAGNOSTIC SCAN -->
+<div class="overlay hide" id="diag">
+  <div class="sheet">
+    <h2>Diagnostic scan</h2>
+    <input id="diagIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scanne un code ici…">
+    <div id="diagLog"></div>
+    <div class="row2">
+      <button class="btn sec" id="diagClear">Vider</button>
+      <button class="btn" id="diagClose">Fermer</button>
+    </div>
   </div>
 </div>
 

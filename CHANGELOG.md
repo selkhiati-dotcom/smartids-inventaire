@@ -4,6 +4,22 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.1.4] — 2026-07-10
+
+Tactile figé sur l'écran de scan (PDA Honeywell) — cause identifiée : tempête
+show→hide→show entre le clavier natif et le `Keyboard.hide()`, qui saturait le thread.
+
+### Corrigé
+- **Anti-tempête clavier** : une seule fermeture du clavier ; s'il revient dans les 2,5 s,
+  on le laisse visible plutôt que de geler l'écran. Re-focus du champ limité (throttle 800 ms).
+
+### Ajouté
+- **Réglage « Mode lecteur »** : *Champ focalisé* (défaut — lecteur qui insère le texte) ou
+  *Touches clavier* (recommandé : mode « Wedge as keys » des PDA Honeywell / DataWedge Zebra —
+  aucun champ focalisé, aucun clavier, capture globale). Procédure indiquée dans Réglages.
+- **🔧 Diagnostic scan** (Réglages) : journal en direct des événements du lecteur (touches,
+  insertions, focus, clavier natif) pour diagnostiquer n'importe quel PDA sur le terrain.
+
 ## [1.1.3] — 2026-07-10
 
 ### Corrigé

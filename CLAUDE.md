@@ -30,12 +30,15 @@ un moteur JavaScript déjà éprouvé par des tests.
   pas de `file.text()`/`arrayBuffer()` (→ `FileReader`), pas de `NodeList.forEach`
   (→ helper `each()`), pas de `Array.from`/`Set` en dédup, pas de `inset` CSS.
   Un `window.onerror` affiche toute erreur JS dans le bandeau `#err` — le garder.
-- **Scan / clavier (v1.1.2)** : TROIS chemins de scan dans `www/app.js` — (1) `wedgeCapture`
+- **Scan / clavier (v1.1.4)** : TROIS chemins de scan dans `www/app.js` — (1) `wedgeCapture`
   keydown global pour les lecteurs à vrais événements clavier ; (2) champ `#scan` focalisé
   (PAS readonly !) pour les lecteurs qui insèrent le texte façon IME : traité sur Entrée,
-  `change`, ou 150 ms d'inactivité ; (3) bouton « ⌨ Saisie » manuel. Le clavier virtuel est
-  masqué nativement (`@capacitor/keyboard`, hide() sur keyboardDidShow hors saisie manuelle).
-  NE PAS réintroduire de boucle blur→refocus (avale les taps) ni de readonly (tue l'IME).
+  `change`, ou 150 ms d'inactivité ; (3) bouton « ⌨ Saisie » manuel. Réglage `scanMode` :
+  'field' (défaut, focus + IME) / 'keys' (« Wedge as keys » Honeywell : AUCUN focus).
+  RÈGLES DURES apprises sur le terrain : jamais de boucle `Keyboard.hide()` sur
+  keyboardDidShow (tempête native↔JS qui FIGE LE TACTILE — d'où l'anti-tempête 2,5 s),
+  jamais de boucle blur→refocus, jamais de readonly sur `#scan`. Un écran « 🔧 Diagnostic
+  scan » (Réglages) journalise touches/input/focus/clavier pour diagnostiquer un PDA.
 - **Versioning** : `APP_VERSION` dans `www/app.js` (affichée dans l'app) + `package.json` +
   entrée `CHANGELOG.md` à chaque évolution. Le versionCode Android est incrémenté par la CI.
 - **Modèle emplacements** : 1 emplacement fixe par produit. On scanne une étiquette d'emplacement
