@@ -12,7 +12,7 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.1.4';
+var APP_VERSION = '1.2.0';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
 /* Compat vieux WebView (PDA) : NodeList n'a pas de .forEach avant Chrome 51 */
@@ -121,14 +121,24 @@ function applyJournal(entries, after){
 }
 
 /* ---------- Persistance FICHIER (ecriture atomique + fallbacks de lecture) ---------- */
-function persistWrite(json){
+var docsWriteLast=0;
+function persistWrite(json, forceDocs){
   if(FS){
     return FS.writeFile({ path:NEW_FILE, data:json, directory:DIR_DATA, encoding:ENC })
       .then(function(){ return FS.deleteFile({ path:BAK_FILE, directory:DIR_DATA }).catch(function(){}); })
       .then(function(){ return FS.rename({ from:DATA_FILE, to:BAK_FILE, directory:DIR_DATA, toDirectory:DIR_DATA }).catch(function(){}); })
       .then(function(){ return FS.rename({ from:NEW_FILE, to:DATA_FILE, directory:DIR_DATA, toDirectory:DIR_DATA }); })
-      .then(function(){ return FS.mkdir({ path:DOCS_SUB, directory:DIR_DOCS, recursive:true }).catch(function(){}); })
-      .then(function(){ return FS.writeFile({ path:DOCS_SUB+'/'+DATA_FILE, data:json, directory:DIR_DOCS, encoding:ENC }).catch(function(){}); })
+      .then(function(){
+        /* Copie Documents : 1 fois / 30 s max (menage le CPU des vieux PDA pendant les
+           rafales de scans ; le journal + le fichier principal protegent chaque scan).
+           Forcee quand l'app passe en arriere-plan. */
+        var now=Date.now();
+        if(!forceDocs && now-docsWriteLast<30000) return;
+        docsWriteLast=now;
+        return FS.mkdir({ path:DOCS_SUB, directory:DIR_DOCS, recursive:true }).catch(function(){})
+          .then(function(){ return FS.writeFile({ path:DOCS_SUB+'/'+DATA_FILE, data:json, directory:DIR_DOCS, encoding:ENC }); })
+          .catch(function(){});
+      })
       .catch(function(e){ try{ localStorage.setItem('smartids_inv_v1', json); }catch(_){} });
   }
   try{ localStorage.setItem('smartids_inv_v1', json); }catch(e){}
@@ -188,17 +198,17 @@ function stateForSave(){
 }
 var saveT=null, saving=false, again=false;
 function saveSoon(){ clearTimeout(saveT); saveT=setTimeout(saveNow, 350); }
-function saveNow(){
+function saveNow(forceDocs){
   if(!S) return Promise.resolve();
   if(saving){ again=true; return Promise.resolve(); }
   saving=true;
   var json=JSON.stringify(stateForSave());
-  return persistWrite(json).then(function(){
+  return persistWrite(json, forceDocs).then(function(){
     saving=false; snapshotMaybe(json);
-    if(again){ again=false; return saveNow(); }
+    if(again){ again=false; return saveNow(forceDocs); }
   });
 }
-function flushSave(){ clearTimeout(saveT); return saveNow(); }
+function flushSave(){ clearTimeout(saveT); return saveNow(true); }
 
 /* ---------- Sons / retour ---------- */
 var actx=null;
@@ -260,7 +270,10 @@ function onParsed(p){ parsed=p;
 function getOperator(){
   var op=$('mOp').value.trim();
   if(!op){ alert('Indique l operateur (la personne responsable du comptage).'); return null; }
-  SET.lastOp=op; settingsSave();
+  SET.lastOp=op;
+  SET.locEnabled=$('mLocEnabled').checked;   /* choix emplacements fait au demarrage */
+  settingsSave();
+  recents=[];
   return op;
 }
 function startFromParsed(){
@@ -295,7 +308,7 @@ function startFromSaved(sv){
       locations:sv.locations||sv.rows.map(function(){return '';}), theo:sv.theo||null, curLoc:sv.curLoc||'',
       barcodeKey:sv.barcodeKey, designationKey:sv.designationKey, refKey:sv.refKey, locationKey:sv.locationKey||'',
       location:sv.location, produitSource:sv.produitSource, freeMode:!!sv.freeMode, operator:sv.operator||'' };
-  S.index=IC.buildIndex(S.rows,S.barcodeKey).idx; undoStack=[]; goScan();
+  S.index=IC.buildIndex(S.rows,S.barcodeKey).idx; undoStack=[]; recents=[]; goScan();
 }
 function goScan(){ $('screenImport').classList.add('hide'); $('screenScan').classList.remove('hide');
   if('BarcodeDetector' in window) $('btnCam').classList.remove('hide'); applySettingsUI(); updateOpUI(); updateLocBar(); render(); focusScan(); }
@@ -381,8 +394,8 @@ function addUnknownScanned(code){
   var u={row:i,delta:1};
   if(SET.locEnabled && S.curLoc){ u.locPrev=''; u.locSet=S.curLoc; IC.setProductLocation(S,i,S.curLoc); }
   undoStack.push(u);
-  setFB('warn','Hors fichier : '+esc(code),'Compte <b>1</b>'+((SET.locEnabled&&S.curLoc)?' - <b>'+esc(S.curLoc)+'</b>':'')+' — code absent du fichier initial');
-  beep('ok'); vibrate(40); render(); refreshStats(); saveSoon();
+  setFB('warn','Hors fichier : '+esc(code),'Compte <b>1</b>'+((SET.locEnabled&&S.curLoc)?' - <b>'+esc(S.curLoc)+'</b>':'')+' — code absent du fichier initial, il sera dans l export');
+  beep('ok'); vibrate(40); touchRecent(i); render(); saveSoon();
 }
 function processScan(raw){
   var lc=IC.parseLocationCode(raw);
@@ -399,7 +412,7 @@ function processScan(raw){
     var name=S.designationKey?(S.rows[res.row][S.designationKey]||''):'';
     var locTxt=IC.getProductLocation(S,res.row);
     setFB('ok','OK '+esc(name||res.code),'Quantite : <b>'+res.count+'</b>'+(locTxt?' - <b>'+esc(locTxt)+'</b>':'')+' - code '+esc(res.code));
-    beep('ok'); vibrate(40); updateRow(res.row); refreshStats(); saveSoon();
+    beep('ok'); vibrate(40); touchRecent(res.row); render(); saveSoon();
   } else {
     if(SET.autoAdd || S.freeMode){ addUnknownScanned(res.code); return; }
     setFB('err','Code inconnu','<div>'+esc(res.code)+'</div><button class="btn ghost" id="addUnk" style="margin-top:8px">+ Ajouter ce code a la liste</button>');
@@ -413,20 +426,35 @@ function doUndo(){ if(!undoStack.length){ toast('Rien a annuler'); return; }
   jlog({k:'cnt',r:u.row,q:S.counts[u.row]});
   if(u.hasOwnProperty('locPrev')) jlog({k:'loc',r:u.row,l:u.locPrev||''});
   var name=S.designationKey?(S.rows[u.row][S.designationKey]||''):'';
-  setFB('','Annule',esc(name)+' - qte '+S.counts[u.row]); updateRow(u.row); refreshStats(); saveSoon(); toast('Derniere action annulee'); vibrate(30); }
+  setFB('','Annule',esc(name)+' - qte '+S.counts[u.row]); touchRecent(u.row); render(); saveSoon(); toast('Derniere action annulee'); vibrate(30); }
 function manual(row,delta){ var before=S.counts[row]||0, after=before+delta; if(after<0)after=0;
   if(after!==before){ undoStack.push({row:row, delta:after-before}); jlog({k:'cnt',r:row,q:after}); }
   S.counts[row]=after; updateRow(row); refreshStats(); saveSoon(); }
 
-/* ---------- Rendu liste ---------- */
+/* ---------- Rendu liste ----------
+   PERFORMANCE PDA : on n'affiche JAMAIS la liste complete (1400 lignes de DOM
+   redessinees a chaque scan figeaient le tactile des vieux WebView). Par defaut :
+   les 5 derniers scans. La recherche n'affiche des resultats (20 max) que si
+   l'utilisateur tape au moins 2 caracteres. */
 function refreshStats(){ var t=IC.totals(S), ls=IC.locationStats(S); $('sUnits').textContent=t.units; $('sDist').textContent=t.distinct; $('sLoc').textContent=ls.withLocation; $('sZero').textContent=t.zero; }
-var filterTimer=null;
-function render(){ refreshStats(); var q=IC.stripAccentsLower($('search').value); var html='', shown=0, LIM=250;
-  for(var i=0;i<S.rows.length;i++){ if(q){ var hay=IC.stripAccentsLower((S.designationKey?S.rows[i][S.designationKey]:'')+' '+(S.refKey?S.rows[i][S.refKey]:'')+' '+S.rows[i][S.barcodeKey]+' '+IC.getProductLocation(S,i)); if(hay.indexOf(q)===-1) continue; }
-    if(shown<LIM) html+=itemHTML(i); shown++; }
-  if(shown>LIM) html+='<p class="muted">... '+(shown-LIM)+' lignes de plus - affine la recherche.</p>';
-  $('list').innerHTML=html || '<p class="muted">'+(S.freeMode&&!S.rows.length?'Comptage libre : scanne un premier code.':'Aucun resultat.')+'</p>';
-  $('listCount').textContent=Math.min(shown,LIM)+(shown>LIM?'+':'')+' / '+S.rows.length; bindItems(); }
+var filterTimer=null, recents=[];
+function touchRecent(row){ var i=recents.indexOf(row); if(i!==-1) recents.splice(i,1); recents.unshift(row); if(recents.length>5) recents.pop(); }
+function render(){ refreshStats(); var q=IC.stripAccentsLower($('search').value); var html='', shown=0;
+  if(q.length>=2){
+    var LIM=20;
+    for(var i=0;i<S.rows.length && shown<LIM;i++){
+      var hay=IC.stripAccentsLower((S.designationKey?S.rows[i][S.designationKey]:'')+' '+(S.refKey?S.rows[i][S.refKey]:'')+' '+S.rows[i][S.barcodeKey]+' '+IC.getProductLocation(S,i));
+      if(hay.indexOf(q)===-1) continue;
+      html+=itemHTML(i); shown++;
+    }
+    $('listCount').textContent=shown+(shown>=LIM?'+':'')+' resultat(s)';
+    $('list').innerHTML=html || '<p class="muted">Aucun resultat.</p>';
+  } else {
+    for(var r=0;r<recents.length;r++){ html+=itemHTML(recents[r]); shown++; }
+    $('listCount').textContent=shown?'derniers scans':'';
+    $('list').innerHTML=html || '<p class="muted">Les produits scannes s afficheront ici (les 5 derniers).</p>';
+  }
+  bindItems(); }
 function smallHTML(i){ var ref=S.refKey?(S.rows[i][S.refKey]||''):''; var bc=S.rows[i][S.barcodeKey]||''; var loc=IC.getProductLocation(S,i);
   return esc(ref)+(ref?' . ':'')+esc(bc)+((loc&&SET.locEnabled)?'<span class="badge-loc">'+esc(loc)+'</span>':''); }
 function itemHTML(i){ var name=S.designationKey?(S.rows[i][S.designationKey]||''):''; var bc=S.rows[i][S.barcodeKey]||''; var q=S.counts[i]||0;
@@ -616,6 +644,7 @@ if(AppP && AppP.addListener){ AppP.addListener('pause', function(){ flushSave();
   settingsLoad().then(function(){
     applySettingsUI();
     if(SET.lastOp) $('mOp').value=SET.lastOp;
+    $('mLocEnabled').checked=SET.locEnabled;
     return persistRead();
   }).then(function(res){
     var sv=res && res.sv;

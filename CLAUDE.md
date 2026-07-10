@@ -88,6 +88,12 @@ cd android && ./gradlew bundleRelease     # AAB release (signé, voir README)
   (un backend Node existe déjà côté projet VPS — meilleure voie pour une vraie synchro Drive/cloud
   automatique qu'une intégration OAuth Google dans l'app), photos produit.
 
+- **PERFORMANCE PDA (v1.2.0)** : ne JAMAIS afficher/redessiner la liste complète des produits
+  sur l'écran de scan (1400 lignes de DOM par scan = tactile figé sur vieux PDA). Le rendu
+  est limité aux 5 derniers scans + résultats de recherche (20 max, ≥2 caractères). La copie
+  Documents est throttlée à 30 s (forcée en arrière-plan) ; journal + fichier principal
+  restent écrits à chaque scan.
+
 ## Conventions
 
 - Vanilla JS (pas de framework), ES5-ish pour compat WebView. Pas de bundler.

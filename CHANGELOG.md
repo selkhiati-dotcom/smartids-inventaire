@@ -4,6 +4,23 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.2.0] — 2026-07-10
+
+Refonte performance de l'écran de scan (suggestion utilisateur) : sur PDA, l'app devenait
+inutilisable après quelques scans — la liste complète (1400 lignes) était redessinée à
+chaque scan et saturait le WebView.
+
+### Modifié
+- **Plus de liste complète à l'écran de scan** : seuls les **5 derniers scans** s'affichent
+  (avec +/- pour corriger). La recherche n'affiche des résultats (20 max) que si on tape
+  au moins 2 caractères. Rendu quasi instantané, même avec des milliers de références.
+- **Choix « Scanner aussi les emplacements » déplacé sur la page de démarrage** (case à
+  cocher à côté du nom de l'opérateur) — plus visible que dans les Réglages (où il reste
+  modifiable en cours de session).
+- **Copie Documents throttlée** (1 fois / 30 s max, forcée au passage en arrière-plan) :
+  moins d'I/O par scan sur les vieux appareils. Le journal d'actions et le fichier
+  principal continuent de protéger chaque scan individuellement.
+
 ## [1.1.4] — 2026-07-10
 
 Tactile figé sur l'écran de scan (PDA Honeywell) — cause identifiée : tempête

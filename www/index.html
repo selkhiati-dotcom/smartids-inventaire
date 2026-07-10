@@ -25,6 +25,7 @@
       <p class="muted">Charge ta liste produits (CSV ou Excel) : code-barres, désignation, référence, prix.</p>
       <label>👤 Opérateur (responsable du comptage)</label>
       <input id="mOp" autocomplete="off" placeholder="Prénom / nom de la personne qui compte">
+      <div class="chk"><input type="checkbox" id="mLocEnabled"><label for="mLocEnabled" style="margin:0">Scanner aussi les <b>emplacements</b> (étiquettes LOC-…)</label></div>
       <label>Fichier produits</label>
       <input type="file" id="file" accept=".csv,.xlsx,.xls,text/csv">
       <div id="resume" class="hide"><button class="btn sec" id="btnResume"></button></div>
@@ -81,7 +82,7 @@
 
     <div class="card">
       <div class="listhead">
-        <input id="search" placeholder="🔎 Filtrer…">
+        <input id="search" placeholder="🔎 Corriger une réf ? Tape pour chercher…">
         <span class="pill" id="listCount"></span>
       </div>
       <div id="list"></div>
