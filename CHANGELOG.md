@@ -4,6 +4,29 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.1.2] — 2026-07-10
+
+Compatibilité **vieux WebView de PDA** (app morte sur Honeywell ancien avec la 1.1.1).
+
+### Corrigé
+- **Import de fichier** : `FileReader` remplace `file.text()`/`arrayBuffer()` (Chrome 76+
+  seulement — l'import plantait sur tout WebView antérieur à 2019).
+- **ES5 strict** : suppression de `Array.from(new Set(...))` (moteur) et de
+  `NodeList.forEach` (Chrome 45/51+) ; `inset` CSS remplacé par top/left/right/bottom.
+- **Scanner** : le champ n'est plus en lecture seule (ça bloquait les lecteurs qui
+  insèrent le texte comme un IME, sans événements de touche — cas des vieux Honeywell).
+  Trois chemins de scan cohabitent : capture clavier globale (WebView récents), champ
+  focalisé avec traitement sur Entrée/`change`/150 ms d'inactivité (insertion IME),
+  saisie manuelle.
+- **Clavier virtuel masqué nativement** (plugin `@capacitor/keyboard`, `hide()` dès
+  qu'il apparaît hors saisie manuelle) — fiable même quand `inputmode=none` est ignoré.
+- Re-focus **doux** du champ scan (tap sur zone non interactive uniquement) — plus
+  jamais de boucle blur→focus qui avalait les taps sur les boutons.
+
+### Ajouté
+- **Bandeau d'erreur visible à l'écran** (`window.onerror`) : sur PDA, une erreur JS
+  n'est plus silencieuse — elle s'affiche avec fichier et ligne, pour diagnostiquer.
+
 ## [1.1.1] — 2026-07-10
 
 Correctifs suite au premier test sur PDA Honeywell (v1.1.0).

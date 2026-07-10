@@ -55,6 +55,7 @@
   .ver{font-size:11px;opacity:.75;font-weight:400;margin-left:6px}
   .center{text-align:center}
   .tools button.on{background:var(--g);border-color:var(--g)}
-  .overlay{position:fixed;inset:0;background:#000a;z-index:30;display:flex;align-items:flex-end;justify-content:center;padding:12px}
+  #err{position:fixed;top:0;left:0;right:0;z-index:99;background:#7a1f1f;color:#fff;font-size:12px;padding:8px 10px;word-break:break-all}
+  .overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#000a;z-index:30;display:flex;align-items:flex-end;justify-content:center;padding:12px}
   .sheet{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;width:100%;max-width:520px;max-height:85vh;overflow:auto}
   .sheet .btn{margin-top:8px;padding:13px;font-size:15px}

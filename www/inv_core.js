@@ -97,7 +97,10 @@
       if (idx.has(code)) { idx.get(code).push(i); dups.push(code); }
       else idx.set(code, [i]);
     }
-    return { idx: idx, dups: Array.from(new Set(dups)) };
+    /* dedup ES5 (Array.from + Set indisponibles sur les vieux WebView de PDA) */
+    var seen = {}, uniq = [];
+    for (var d = 0; d < dups.length; d++) { if (!seen[dups[d]]) { seen[dups[d]] = 1; uniq.push(dups[d]); } }
+    return { idx: idx, dups: uniq };
   }
 
   function applyScan(state, rawCode, delta) {

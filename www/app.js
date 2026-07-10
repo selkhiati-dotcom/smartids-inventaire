@@ -12,9 +12,20 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.1.1';
+var APP_VERSION = '1.1.2';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
+/* Compat vieux WebView (PDA) : NodeList n'a pas de .forEach avant Chrome 51 */
+function each(list, fn){ Array.prototype.forEach.call(list, fn); }
+/* Toute erreur JS est AFFICHEE a l'ecran : sur un PDA il n'y a pas de console,
+   et une erreur silencieuse = "plus rien ne marche" sans explication. */
+window.onerror = function(msg, src, line){
+  try{
+    var el=document.getElementById('err');
+    el.textContent='⚠ Erreur v'+APP_VERSION+' : '+msg+' ('+String(src||'').split('/').pop()+':'+line+')';
+    el.classList.remove('hide');
+  }catch(e){}
+};
 
 /* ---------- Acces Capacitor ---------- */
 var CAP = window.Capacitor || {};
@@ -195,17 +206,25 @@ var toastT=null;
 function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(function(){t.classList.remove('show');},1600); }
 function todayTag(){ var d=new Date(); function p(n){return(n<10?'0':'')+n;} return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes()); }
 
-/* ---------- Lecture fichier produits ---------- */
+/* ---------- Lecture fichier produits ----------
+   FileReader obligatoire : file.text()/arrayBuffer() n'existent qu'a partir de
+   Chrome 76 — un vieux WebView de PDA planterait a l'import. */
+function readAsText(file){ return new Promise(function(res,rej){ var r=new FileReader();
+  r.onload=function(){ res(String(r.result||'')); }; r.onerror=function(){ rej(new Error('Lecture du fichier impossible.')); };
+  r.readAsText(file,'utf-8'); }); }
+function readAsBuffer(file){ return new Promise(function(res,rej){ var r=new FileReader();
+  r.onload=function(){ res(r.result); }; r.onerror=function(){ rej(new Error('Lecture du fichier impossible.')); };
+  r.readAsArrayBuffer(file); }); }
 function readFile(file){ var name=(file.name||'').toLowerCase();
-  if(name.endsWith('.xlsx')||name.endsWith('.xls')){ return readXlsx(file); }
-  return file.text().then(function(txt){ return IC.parseDelimited(txt); }); }
+  if(/\.xlsx?$/.test(name)){ return readXlsx(file); }
+  return readAsText(file).then(function(txt){ return IC.parseDelimited(txt); }); }
 function ensureSheetJS(){ if(window.XLSX) return Promise.resolve(true);
   return new Promise(function(res){ var s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
     s.onload=function(){res(!!window.XLSX);}; s.onerror=function(){res(false);}; document.head.appendChild(s); }); }
 function readXlsx(file){ return ensureSheetJS().then(function(okk){
     if(!okk) throw new Error('Excel indisponible hors-ligne - exporte en CSV (separateur ;) et recharge.');
-    return file.arrayBuffer(); }).then(function(buf){
+    return readAsBuffer(file); }).then(function(buf){
     var wb=XLSX.read(buf,{type:'array'}); var ws=wb.Sheets[wb.SheetNames[0]];
     var aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
     aoa=aoa.filter(function(r){return r.some(function(v){return String(v).trim()!=='';});});
@@ -278,28 +297,31 @@ function goScan(){ $('screenImport').classList.add('hide'); $('screenScan').clas
 function updateOpUI(){ var el=$('sOp'); if(el) el.textContent=(S&&S.operator)?S.operator:'—'; }
 
 /* ---------- Clavier / scanner ----------
-   Le champ #scan est en LECTURE SEULE : le clavier virtuel ne peut jamais s'ouvrir
-   (les WebView/Gboard de certains PDA ignorent inputmode=none). Les frappes du lecteur
-   laser (mode clavier) sont capturees au niveau du document : aucun champ n'a besoin
-   d'etre focalise, donc plus aucun re-focus qui avale les taps sur les boutons.
-   Bouton « ⌨ Saisie » (ou tap sur le champ) = saisie manuelle ponctuelle. */
+   Trois chemins de scan, pour couvrir tous les PDA :
+   1. wedgeCapture (document, phase capture) : lecteurs qui envoient de VRAIS evenements
+      clavier — aucun champ n'a besoin d'etre focalise (WebView recents).
+   2. Champ #scan focalise : lecteurs qui INSERENT le texte comme un IME sans evenements
+      de touche (vieux WebView Honeywell/Zebra) — traite sur Entree, sur 'change', ou
+      apres 150 ms d'inactivite du champ.
+   3. Bouton « ⌨ Saisie » : clavier virtuel pour taper un code a la main.
+   Clavier virtuel : masque NATIVEMENT des qu'il apparait (plugin Capacitor Keyboard,
+   fiable meme sur vieux Android), sauf en saisie manuelle. inputmode=none en plus
+   pour les WebView recents. Le champ n'est PAS readonly (ca bloquerait l'insertion IME). */
 var kbManual=false;
+var KBP = PL.Keyboard;
+if(KBP && KBP.addListener){
+  KBP.addListener('keyboardDidShow', function(){ if(!kbManual && KBP.hide){ KBP.hide()['catch'](function(){}); } });
+}
 function setKbMode(manual){
   kbManual=manual;
   var el=$('scan');
-  if(manual){
-    el.removeAttribute('readonly'); el.setAttribute('inputmode','text');
-    try{ el.blur(); }catch(e){}
-    setTimeout(function(){ try{ el.focus(); }catch(e){} }, 50);
-  } else {
-    el.setAttribute('readonly','readonly'); el.setAttribute('inputmode','none');
-    el.value=''; try{ el.blur(); }catch(e){}
-  }
+  el.setAttribute('inputmode', manual?'text':'none');
   $('btnKb').classList.toggle('on', manual);
+  if(manual){ try{ el.blur(); }catch(e){} setTimeout(function(){ try{ el.focus(); }catch(e){} }, 50); }
+  else { if(KBP && KBP.hide){ KBP.hide()['catch'](function(){}); } focusScan(); }
 }
 var scanBuf='', scanBufT=null;
-function bufShow(){ $('scan').value=scanBuf; }
-function bufReset(){ scanBuf=''; clearTimeout(scanBufT); bufShow(); }
+function bufReset(){ scanBuf=''; clearTimeout(scanBufT); }
 function wedgeCapture(e){
   if(!S || kbManual) return;
   if($('screenScan').classList.contains('hide')) return;
@@ -309,16 +331,17 @@ function wedgeCapture(e){
   if(t.id==='search') return;
   if((tag==='input'||tag==='select'||tag==='textarea') && t.id!=='scan') return;
   if(e.key==='Enter'||e.key==='Tab'){
-    if(scanBuf){ e.preventDefault(); var v=scanBuf; bufReset(); processScan(v); }
+    if(scanBuf){ e.preventDefault(); e.stopPropagation(); var v=scanBuf; bufReset(); $('scan').value=''; processScan(v); }
     return;
   }
   if(e.key && e.key.length===1 && !e.ctrlKey && !e.altKey && !e.metaKey){
-    e.preventDefault(); scanBuf+=e.key; bufShow();
-    clearTimeout(scanBufT); scanBufT=setTimeout(bufReset, 3000);
+    e.preventDefault(); scanBuf+=e.key; $('scan').value=scanBuf;
+    clearTimeout(scanBufT); scanBufT=setTimeout(function(){ bufReset(); $('scan').value=''; }, 3000);
   }
 }
 document.addEventListener('keydown', wedgeCapture, true);
-function focusScan(){ /* plus de re-focus force : la capture des scans est globale */ }
+function focusScan(){ if(kbManual) return; var el=$('scan');
+  if(el && !$('screenScan').classList.contains('hide') && $('camWrap').classList.contains('hide')){ try{ el.focus(); }catch(e){} } }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function setFB(kind,big,sub){ var f=$('fb'); f.className=''; if(kind)f.classList.add(kind); f.innerHTML='<div class="big">'+big+'</div><div class="sub">'+(sub||'')+'</div>'; }
 function updateLocBar(){ var el=$('curLoc'); if(el){ el.textContent=S.curLoc?S.curLoc:'— aucun —'; el.style.color=S.curLoc?'var(--loc)':'var(--mut)'; } }
@@ -385,7 +408,7 @@ function smallHTML(i){ var ref=S.refKey?(S.rows[i][S.refKey]||''):''; var bc=S.r
 function itemHTML(i){ var name=S.designationKey?(S.rows[i][S.designationKey]||''):''; var bc=S.rows[i][S.barcodeKey]||''; var q=S.counts[i]||0;
   return '<div class="item'+(q>0?' has':'')+'" data-i="'+i+'"><div class="d"><b>'+esc(name||bc)+'</b><small id="s'+i+'">'+smallHTML(i)+'</small></div>'+
     '<button data-act="m" data-i="'+i+'">-</button><div class="q" id="q'+i+'">'+q+'</div><button data-act="p" data-i="'+i+'">+</button></div>'; }
-function bindItems(){ $('list').querySelectorAll('button[data-act]').forEach(function(b){ b.onclick=function(){ var i=+b.getAttribute('data-i'); manual(i, b.getAttribute('data-act')==='p'?1:-1); }; }); }
+function bindItems(){ each($('list').querySelectorAll('button[data-act]'), function(b){ b.onclick=function(){ var i=+b.getAttribute('data-i'); manual(i, b.getAttribute('data-act')==='p'?1:-1); }; }); }
 function updateRow(i){ var qel=$('q'+i); if(qel){ qel.textContent=S.counts[i]||0; var it=qel.closest('.item'); if(it){ if(S.counts[i]>0)it.classList.add('has'); else it.classList.remove('has'); } }
   var sel=$('s'+i); if(sel) sel.innerHTML=smallHTML(i); }
 
@@ -472,13 +495,27 @@ $('file').addEventListener('change',function(e){ var f=e.target.files[0]; if(!f)
   readFile(f).then(function(p){ p._name=f.name.replace(/\.[^.]+$/,''); onParsed(p); }).catch(function(err){ alert('Erreur de lecture : '+err.message); }); });
 $('btnStart').addEventListener('click',startFromParsed);
 $('btnFree').addEventListener('click',startFreeCount);
-/* Saisie manuelle uniquement : en mode scanner, tout passe par wedgeCapture (document). */
-var suppressChange=false;
-$('scan').addEventListener('keydown',function(e){ if(!kbManual) return;
-  if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); var v=this.value; this.value=''; suppressChange=true; setTimeout(function(){suppressChange=false;},0); if(v.trim()) processScan(v); setKbMode(false); } });
-$('scan').addEventListener('change',function(){ if(!kbManual) return;
-  if(suppressChange){ suppressChange=false; this.value=''; return; } if(this.value.trim()){ var v=this.value; this.value=''; processScan(v); setKbMode(false); } });
-$('scan').addEventListener('click',function(){ if(!kbManual) setKbMode(true); });
+/* Entree/Tab et 'change' : lecteurs a evenements clavier (via le champ) + saisie manuelle. */
+var suppressChange=false, inputT=null;
+$('scan').addEventListener('keydown',function(e){
+  if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); clearTimeout(inputT);
+    var v=this.value; this.value=''; suppressChange=true; setTimeout(function(){suppressChange=false;},0);
+    if(v.trim()) processScan(v); if(kbManual) setKbMode(false); } });
+$('scan').addEventListener('change',function(){
+  if(suppressChange){ suppressChange=false; this.value=''; return; }
+  clearTimeout(inputT);
+  if(this.value.trim()){ var v=this.value; this.value=''; processScan(v); if(kbManual) setKbMode(false); } });
+/* Lecteurs qui INSERENT le texte sans evenements de touche (IME des vieux PDA) :
+   traitement des qu'un saut de ligne apparait, ou apres 150 ms sans nouvelle insertion.
+   Jamais en saisie manuelle (un humain tape lentement). */
+$('scan').addEventListener('input',function(){
+  if(kbManual) return;
+  var el=this, v=el.value;
+  if(!v || v===scanBuf) return;
+  if(/[\r\n]/.test(v)){ clearTimeout(inputT); el.value=''; v=v.replace(/[\r\n]/g,' ').trim(); if(v) processScan(v.split(' ')[0]); return; }
+  clearTimeout(inputT);
+  inputT=setTimeout(function(){ var vv=el.value; el.value=''; if(vv.trim()) processScan(vv.trim()); }, 150);
+});
 $('undo').addEventListener('click',doUndo);
 $('btnKb').addEventListener('click',function(){ setKbMode(!kbManual); });
 $('btnSetLoc').addEventListener('click',function(){ var c=prompt('Emplacement courant (ex : A-03-B). Astuce : scanne plutot l etiquette.', S.curLoc||''); if(c==null) return; c=IC.normLoc(c); if(c) setCurrentLocation(c); else { S.curLoc=''; jlog({k:'curloc',l:''}); updateLocBar(); saveSoon(); } focusScan(); });
@@ -503,8 +540,16 @@ $('setAuto').addEventListener('change',function(){ SET.autoAdd=this.checked; set
 $('setOp').addEventListener('change',function(){ var op=this.value.trim(); if(!op) return;
   SET.lastOp=op; settingsSave();
   if(S && op!==S.operator){ S.operator=op; jlog({k:'op',l:op}); updateOpUI(); saveSoon(); toast('Operateur : '+op); } });
-/* (Les anciens re-focus automatiques du champ scan ont ete supprimes : ils avalaient
-   les taps sur les boutons sur certains PDA. La capture globale ne necessite aucun focus.) */
+/* Re-focus doux du champ scan (necessaire au chemin IME des vieux PDA) : uniquement
+   sur tap d'une zone NON interactive, jamais de boucle blur->focus (ca avalait les
+   taps sur les boutons en v1.1.0). Le clavier virtuel est masque nativement. */
+document.addEventListener('click',function(e){ if(!S || kbManual) return;
+  if($('screenScan').classList.contains('hide')) return;
+  if(!$('camWrap').classList.contains('hide')) return;
+  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide')) return;
+  var tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='button'||tag==='select'||tag==='a'||tag==='video'||tag==='label') return;
+  setTimeout(focusScan,0); });
 $('scan').addEventListener('blur',function(){ if(kbManual) setKbMode(false); });
 
 /* Filets de securite: sauvegarde immediate quand l'app passe en arriere-plan / se ferme */
@@ -514,7 +559,7 @@ if(AppP && AppP.addListener){ AppP.addListener('pause', function(){ flushSave();
 
 /* ---------- Demarrage : reglages + auto-reprise (fichier -> fallbacks -> rejeu journal) ---------- */
 (function boot(){
-  document.querySelectorAll('.ver').forEach(function(el){ el.textContent='v'+APP_VERSION; });
+  each(document.querySelectorAll('.ver'), function(el){ el.textContent='v'+APP_VERSION; });
   settingsLoad().then(function(){
     applySettingsUI();
     if(SET.lastOp) $('mOp').value=SET.lastOp;

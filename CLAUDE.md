@@ -25,11 +25,17 @@ un moteur JavaScript déjà éprouvé par des tests.
 - **Réglages** persistés dans `settings.json` (Directory.Data) : emplacements on/off, ajout auto
   des codes inconnus (défaut ON), dernier opérateur. Un **opérateur** (responsable du comptage)
   est exigé au démarrage, journalisé, et tracé dans les exports (nom de fichier + colonne).
-- **Scan / clavier (v1.1.1, testé sur PDA Honeywell)** : le champ `#scan` est en **lecture seule**
-  (jamais de clavier virtuel — certains WebView/Gboard ignorent `inputmode=none`) ; les frappes
-  du lecteur laser sont capturées par un listener `keydown` GLOBAL (`wedgeCapture`), aucun focus
-  requis. NE PAS réintroduire de re-focus automatique du champ : ça avale les taps sur les
-  boutons sur PDA. Saisie manuelle = bouton « ⌨ Saisie » ou tap sur le champ.
+- **COMPAT VIEUX WEBVIEW (PDA) — règle absolue** : les PDA Honeywell/Zebra ont des WebView
+  anciens jamais mis à jour. ES5 strict UNIQUEMENT, et bannir les API récentes :
+  pas de `file.text()`/`arrayBuffer()` (→ `FileReader`), pas de `NodeList.forEach`
+  (→ helper `each()`), pas de `Array.from`/`Set` en dédup, pas de `inset` CSS.
+  Un `window.onerror` affiche toute erreur JS dans le bandeau `#err` — le garder.
+- **Scan / clavier (v1.1.2)** : TROIS chemins de scan dans `www/app.js` — (1) `wedgeCapture`
+  keydown global pour les lecteurs à vrais événements clavier ; (2) champ `#scan` focalisé
+  (PAS readonly !) pour les lecteurs qui insèrent le texte façon IME : traité sur Entrée,
+  `change`, ou 150 ms d'inactivité ; (3) bouton « ⌨ Saisie » manuel. Le clavier virtuel est
+  masqué nativement (`@capacitor/keyboard`, hide() sur keyboardDidShow hors saisie manuelle).
+  NE PAS réintroduire de boucle blur→refocus (avale les taps) ni de readonly (tue l'IME).
 - **Versioning** : `APP_VERSION` dans `www/app.js` (affichée dans l'app) + `package.json` +
   entrée `CHANGELOG.md` à chaque évolution. Le versionCode Android est incrémenté par la CI.
 - **Modèle emplacements** : 1 emplacement fixe par produit. On scanne une étiquette d'emplacement
