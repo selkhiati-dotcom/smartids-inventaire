@@ -22,17 +22,21 @@ un moteur JavaScript déjà éprouvé par des tests.
      `Documents/SmartIDS/backups/` ;
   4. au boot, lecture en cascade : principal → new → bak → copie Documents, puis rejeu du journal.
   Ne JAMAIS affaiblir ce schéma (inventaires de plusieurs jours).
-- **Réglages** persistés dans `settings.json` (Directory.Data) : emplacements on/off,
-  ajout auto des codes inconnus. Le champ scan est en `inputmode="none"` (pas de clavier virtuel ;
-  les scanners Honeywell/Zebra en mode clavier écrivent quand même) — bouton « ⌨ Saisie » pour
-  la saisie manuelle.
+- **Réglages** persistés dans `settings.json` (Directory.Data) : emplacements on/off, ajout auto
+  des codes inconnus (défaut ON), dernier opérateur. Un **opérateur** (responsable du comptage)
+  est exigé au démarrage, journalisé, et tracé dans les exports (nom de fichier + colonne).
+- **Scan / clavier (v1.1.1, testé sur PDA Honeywell)** : le champ `#scan` est en **lecture seule**
+  (jamais de clavier virtuel — certains WebView/Gboard ignorent `inputmode=none`) ; les frappes
+  du lecteur laser sont capturées par un listener `keydown` GLOBAL (`wedgeCapture`), aucun focus
+  requis. NE PAS réintroduire de re-focus automatique du champ : ça avale les taps sur les
+  boutons sur PDA. Saisie manuelle = bouton « ⌨ Saisie » ou tap sur le champ.
 - **Versioning** : `APP_VERSION` dans `www/app.js` (affichée dans l'app) + `package.json` +
   entrée `CHANGELOG.md` à chaque évolution. Le versionCode Android est incrémenté par la CI.
 - **Modèle emplacements** : 1 emplacement fixe par produit. On scanne une étiquette d'emplacement
   (code-barres préfixé `LOC-`, ex `LOC-A-03-B`) qui devient l'emplacement courant, puis les produits
   scannés s'y rattachent. Voir `parseLocationCode` / `setProductLocation` dans `inv_core.js`.
-- **Scan** : PDA = lecteur laser en mode clavier (aucune config, l'input `#scan` reçoit les touches +
-  Entrée). Téléphone = bouton Caméra (BarcodeDetector).
+- **Scan** : PDA = lecteur laser en mode clavier (aucune config, frappes capturées globalement,
+  voir point « Scan / clavier » ci-dessus). Téléphone = bouton Caméra (BarcodeDetector).
 
 ## Structure
 

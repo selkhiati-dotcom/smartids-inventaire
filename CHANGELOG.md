@@ -4,6 +4,30 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.1.1] — 2026-07-10
+
+Correctifs suite au premier test sur PDA Honeywell (v1.1.0).
+
+### Corrigé
+- **Clavier virtuel qui remontait sur PDA** : le champ scan est désormais en **lecture seule**
+  (le clavier ne peut plus jamais s'ouvrir seul, même sur les WebView/Gboard qui ignorent
+  `inputmode=none`). Les frappes du lecteur laser sont capturées **au niveau du document** :
+  aucun champ n'a besoin d'être focalisé.
+- **Boutons (⋯, Saisie, Caméra…) qui ne répondaient pas** : suppression du re-focus automatique
+  du champ scan qui avalait les taps sur certains WebView.
+
+### Ajouté
+- **Opérateur (responsable du comptage)** : demandé au démarrage de l'inventaire, affiché à
+  l'écran de scan, modifiable dans Réglages (changement journalisé), mémorisé pour la session
+  suivante, inscrit dans le **nom des fichiers exportés** et en **colonne « Opérateur »** dans
+  les rapports (écarts, emplacements, complet — l'export Odoo reste au format d'import pur).
+- Tap sur le champ scan = ouvre la saisie manuelle (équivalent du bouton ⌨ Saisie).
+
+### Modifié
+- **Ajout automatique des codes absents du fichier : activé par défaut** — un code inconnu est
+  enregistré avec sa quantité et la désignation « INCONNU (scanné) », facile à filtrer dans
+  Excel pour recherche ultérieure.
+
 ## [1.1.0] — 2026-07-10
 
 ### Ajouté

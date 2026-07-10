@@ -21,6 +21,9 @@
     <div class="card">
       <h2>1 · Fichier de départ</h2>
       <p class="muted">Charge ta liste produits (CSV ou Excel) : code-barres, désignation, référence, prix.</p>
+      <label>👤 Opérateur (responsable du comptage)</label>
+      <input id="mOp" autocomplete="off" placeholder="Prénom / nom de la personne qui compte">
+      <label>Fichier produits</label>
       <input type="file" id="file" accept=".csv,.xlsx,.xls,text/csv">
       <div id="resume" class="hide"><button class="btn sec" id="btnResume"></button></div>
       <button class="btn ghost" id="btnFree">▶ Comptage libre (sans fichier)</button>
@@ -56,7 +59,7 @@
     </div>
 
     <div class="card">
-      <input id="scan" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scannez un code-barres…">
+      <input id="scan" readonly inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scannez un code-barres…">
       <div id="fb"><div class="big">Prêt à scanner</div><div class="sub">Scanne une étiquette d'emplacement, puis les produits.</div></div>
     </div>
 
@@ -67,6 +70,7 @@
     </div>
 
     <div class="statline">
+      <span>👤 <b id="sOp">—</b></span>
       <span><b id="sUnits">0</b> unités</span>
       <span><b id="sDist">0</b> réfs</span>
       <span id="sLocWrap"><b id="sLoc">0</b> empl.</span>
@@ -118,6 +122,8 @@
 <div class="overlay hide" id="settings">
   <div class="sheet">
     <h2>Réglages</h2>
+    <label>👤 Opérateur (responsable du comptage)</label>
+    <input id="setOp" autocomplete="off" placeholder="Prénom / nom">
     <div class="chk"><input type="checkbox" id="setLoc"><label for="setLoc" style="margin:0">Gestion des <b>emplacements</b> (étiquettes LOC-…)</label></div>
     <div class="chk"><input type="checkbox" id="setAuto"><label for="setAuto" style="margin:0">Ajouter <b>automatiquement</b> les codes absents du fichier</label></div>
     <p class="muted">Sauvegarde continue : chaque scan est journalisé puis écrit dans un fichier local

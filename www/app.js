@@ -12,7 +12,7 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.1.0';
+var APP_VERSION = '1.1.1';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
 
@@ -31,11 +31,12 @@ var SNAP_SUB = 'SmartIDS/backups';
 var SNAP_EVERY_MS = 10*60*1000;
 
 /* ---------- Reglages (persistes, independants de l'inventaire) ---------- */
-var SET = { locEnabled:true, autoAdd:false };
+var SET = { locEnabled:true, autoAdd:true, lastOp:'' };
 function settingsLoad(){
   function apply(o){ if(o && typeof o==='object'){
     if(typeof o.locEnabled==='boolean') SET.locEnabled=o.locEnabled;
-    if(typeof o.autoAdd==='boolean') SET.autoAdd=o.autoAdd; } }
+    if(typeof o.autoAdd==='boolean') SET.autoAdd=o.autoAdd;
+    if(typeof o.lastOp==='string') SET.lastOp=o.lastOp; } }
   if(FS){
     return FS.readFile({ path:SETTINGS_FILE, directory:DIR_DATA, encoding:ENC })
       .then(function(r){ try{ apply(JSON.parse(typeof r.data==='string'?r.data:'')); }catch(e){} })
@@ -98,6 +99,7 @@ function applyJournal(entries, after){
     else if(e.k==='cnt'){ if(e.r>=0 && e.r<S.counts.length){ S.counts[e.r]=Math.max(0,+e.q||0); n++; } }
     else if(e.k==='loc'){ if(e.r>=0 && e.r<S.rows.length){ IC.setProductLocation(S,e.r,e.l||''); n++; } }
     else if(e.k==='curloc'){ S.curLoc=e.l||''; n++; }
+    else if(e.k==='op'){ S.operator=e.l||''; n++; }
   });
   return n;
 }
@@ -165,7 +167,8 @@ function stateForSave(){
   return { ver:APP_VERSION, fileName:S.fileName, headers:S.headers, rows:S.rows, counts:S.counts,
     locations:S.locations, theo:S.theo||null, curLoc:S.curLoc, locationKey:S.locationKey,
     barcodeKey:S.barcodeKey, designationKey:S.designationKey, refKey:S.refKey,
-    location:S.location, produitSource:S.produitSource, freeMode:!!S.freeMode, savedAt:Date.now() };
+    location:S.location, produitSource:S.produitSource, freeMode:!!S.freeMode,
+    operator:S.operator||'', savedAt:Date.now() };
 }
 var saveT=null, saving=false, again=false;
 function saveSoon(){ clearTimeout(saveT); saveT=setTimeout(saveNow, 350); }
@@ -230,9 +233,16 @@ function onParsed(p){ parsed=p;
   fillSelectOpt($('mTheo'),p.headers,c.theo); fillSelectOpt($('mQty'),p.headers,c.qty);
   refreshMapInfo(); $('mBarcode').onchange=refreshMapInfo; $('mapCard').classList.remove('hide'); }
 
+function getOperator(){
+  var op=$('mOp').value.trim();
+  if(!op){ alert('Indique l operateur (la personne responsable du comptage).'); return null; }
+  SET.lastOp=op; settingsSave();
+  return op;
+}
 function startFromParsed(){
   var bk=$('mBarcode').value, dk=$('mDesig').value, rk=$('mRef').value, lk=$('mLocCol').value, qk=$('mQty').value, tk=$('mTheo').value;
   if(!bk){ alert('Choisis la colonne code-barres.'); return; }
+  var op=getOperator(); if(op==null) return;
   var rows=parsed.rows.slice();
   var locs=rows.map(function(r){ return lk ? IC.normLoc(r[lk]) : ''; });
   function seedQty(r){ if(!qk) return 0; var v=parseInt(String(r[qk]==null?'':r[qk]).replace(/[^0-9-]/g,''),10); return (isFinite(v)&&v>0)?v:0; }
@@ -241,16 +251,18 @@ function startFromParsed(){
   S={ fileName:(parsed._name||'inventaire'), headers:parsed.headers.slice(), rows:rows,
       counts:counts, locations:locs, theo:(tk?rows.map(seedTheo):null), curLoc:'',
       barcodeKey:bk, designationKey:dk, refKey:rk, locationKey:lk,
-      location:$('mLoc').value.trim()||'WH/Stock', produitSource:$('mProdRef').checked?'ref':'barcode' };
+      location:$('mLoc').value.trim()||'WH/Stock', produitSource:$('mProdRef').checked?'ref':'barcode',
+      operator:op };
   S.index=IC.buildIndex(S.rows,S.barcodeKey).idx; undoStack=[]; saveNow(); goScan();
   var seeded=counts.reduce(function(a,b){return a+b;},0);
   if(seeded>0) toast('Reprise : '+seeded+' unite(s) rechargee(s)');
 }
 function startFreeCount(){
+  var op=getOperator(); if(op==null) return;
   if(!confirm('Comptage libre : pas de fichier de reference, chaque code scanne est ajoute et compte. Continuer ?')) return;
   S={ fileName:'comptage_libre', headers:['Code-barres','Désignation'], rows:[], counts:[], locations:[], theo:null, curLoc:'',
       barcodeKey:'Code-barres', designationKey:'Désignation', refKey:'', locationKey:'',
-      location:'WH/Stock', produitSource:'barcode', freeMode:true };
+      location:'WH/Stock', produitSource:'barcode', freeMode:true, operator:op };
   S.index=IC.buildIndex(S.rows,S.barcodeKey).idx; undoStack=[]; saveNow(); goScan();
   toast('Comptage libre demarre');
 }
@@ -258,25 +270,55 @@ function startFromSaved(sv){
   S={ fileName:sv.fileName, headers:sv.headers, rows:sv.rows, counts:sv.counts,
       locations:sv.locations||sv.rows.map(function(){return '';}), theo:sv.theo||null, curLoc:sv.curLoc||'',
       barcodeKey:sv.barcodeKey, designationKey:sv.designationKey, refKey:sv.refKey, locationKey:sv.locationKey||'',
-      location:sv.location, produitSource:sv.produitSource, freeMode:!!sv.freeMode };
+      location:sv.location, produitSource:sv.produitSource, freeMode:!!sv.freeMode, operator:sv.operator||'' };
   S.index=IC.buildIndex(S.rows,S.barcodeKey).idx; undoStack=[]; goScan();
 }
 function goScan(){ $('screenImport').classList.add('hide'); $('screenScan').classList.remove('hide');
-  if('BarcodeDetector' in window) $('btnCam').classList.remove('hide'); applySettingsUI(); updateLocBar(); render(); focusScan(); }
+  if('BarcodeDetector' in window) $('btnCam').classList.remove('hide'); applySettingsUI(); updateOpUI(); updateLocBar(); render(); focusScan(); }
+function updateOpUI(){ var el=$('sOp'); if(el) el.textContent=(S&&S.operator)?S.operator:'—'; }
 
-/* ---------- Clavier : inputmode=none par defaut (le scanner physique ecrit quand
-   meme dans le champ focalise, mais le clavier virtuel ne remonte plus).
-   Bouton clavier = saisie manuelle ponctuelle. ---------- */
+/* ---------- Clavier / scanner ----------
+   Le champ #scan est en LECTURE SEULE : le clavier virtuel ne peut jamais s'ouvrir
+   (les WebView/Gboard de certains PDA ignorent inputmode=none). Les frappes du lecteur
+   laser (mode clavier) sont capturees au niveau du document : aucun champ n'a besoin
+   d'etre focalise, donc plus aucun re-focus qui avale les taps sur les boutons.
+   Bouton « ⌨ Saisie » (ou tap sur le champ) = saisie manuelle ponctuelle. */
 var kbManual=false;
 function setKbMode(manual){
   kbManual=manual;
   var el=$('scan');
-  el.setAttribute('inputmode', manual?'text':'none');
+  if(manual){
+    el.removeAttribute('readonly'); el.setAttribute('inputmode','text');
+    try{ el.blur(); }catch(e){}
+    setTimeout(function(){ try{ el.focus(); }catch(e){} }, 50);
+  } else {
+    el.setAttribute('readonly','readonly'); el.setAttribute('inputmode','none');
+    el.value=''; try{ el.blur(); }catch(e){}
+  }
   $('btnKb').classList.toggle('on', manual);
-  try{ el.blur(); }catch(e){}
-  setTimeout(function(){ try{ el.focus(); }catch(e){} }, 50);
 }
-function focusScan(){ var el=$('scan'); if(el && $('camWrap').classList.contains('hide')){ try{el.focus();}catch(e){} } }
+var scanBuf='', scanBufT=null;
+function bufShow(){ $('scan').value=scanBuf; }
+function bufReset(){ scanBuf=''; clearTimeout(scanBufT); bufShow(); }
+function wedgeCapture(e){
+  if(!S || kbManual) return;
+  if($('screenScan').classList.contains('hide')) return;
+  if(!$('camWrap').classList.contains('hide')) return;
+  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide')) return;
+  var t=e.target||{}, tag=(t.tagName||'').toLowerCase();
+  if(t.id==='search') return;
+  if((tag==='input'||tag==='select'||tag==='textarea') && t.id!=='scan') return;
+  if(e.key==='Enter'||e.key==='Tab'){
+    if(scanBuf){ e.preventDefault(); var v=scanBuf; bufReset(); processScan(v); }
+    return;
+  }
+  if(e.key && e.key.length===1 && !e.ctrlKey && !e.altKey && !e.metaKey){
+    e.preventDefault(); scanBuf+=e.key; bufShow();
+    clearTimeout(scanBufT); scanBufT=setTimeout(bufReset, 3000);
+  }
+}
+document.addEventListener('keydown', wedgeCapture, true);
+function focusScan(){ /* plus de re-focus force : la capture des scans est globale */ }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function setFB(kind,big,sub){ var f=$('fb'); f.className=''; if(kind)f.classList.add(kind); f.innerHTML='<div class="big">'+big+'</div><div class="sub">'+(sub||'')+'</div>'; }
 function updateLocBar(){ var el=$('curLoc'); if(el){ el.textContent=S.curLoc?S.curLoc:'— aucun —'; el.style.color=S.curLoc?'var(--loc)':'var(--mut)'; } }
@@ -356,6 +398,10 @@ function applySettingsUI(){
 }
 
 /* ---------- Exports (ecriture FICHIER + partage) ---------- */
+/* Tracabilite : l'operateur est inscrit dans le nom des fichiers exportes, et en
+   colonne dans les rapports (sauf l'export Odoo, garde au format d'import pur). */
+function fileTag(){ var op=(S&&S.operator)?'_'+S.operator.replace(/[^A-Za-z0-9_-]+/g,'_'):''; return todayTag()+op; }
+function withOperator(rows){ var op=(S&&S.operator)||''; rows.forEach(function(r){ r['Opérateur']=op; }); return rows; }
 function saveCsv(name, csv){
   if(FS){
     return FS.mkdir({ path:DOCS_SUB, directory:DIR_DOCS, recursive:true }).catch(function(){})
@@ -371,19 +417,19 @@ function exportOdoo(){ var rows=IC.buildOdooRows(S,{location:S.location, include
   if(!rows.length){ alert('Aucune ligne a exporter (coche "inclure les lignes a 0" pour un inventaire complet).'); return; }
   var unk=rows.filter(function(r){return /INCONNU/.test(String(r['Désignation']));}).length;
   if(unk && !confirm(unk+' code(s) inconnu(s) inclus. Ils devront exister dans Odoo avant import. Continuer ?')) return;
-  saveCsv('Inventaire_Odoo_'+todayTag()+'.csv', IC.toCSV(rows,['Produit','Désignation','Emplacement','Quantité comptée'],';')); }
+  saveCsv('Inventaire_Odoo_'+fileTag()+'.csv', IC.toCSV(rows,['Produit','Désignation','Emplacement','Quantité comptée'],';')); }
 function exportLocations(){ var rows=IC.buildLocationRows(S,{onlyWithLocation:true, produitSource:S.produitSource});
   if(!rows.length){ alert('Aucun produit n a d emplacement affecte. Scanne d abord une etiquette d emplacement, puis les produits.'); return; }
-  saveCsv('Emplacements_produits_'+todayTag()+'.csv', IC.toCSV(rows,['Produit','Code-barres','Désignation','Emplacement','Quantité comptée'],';')); }
+  saveCsv('Emplacements_produits_'+fileTag()+'.csv', IC.toCSV(withOperator(rows),['Produit','Code-barres','Désignation','Emplacement','Quantité comptée','Opérateur'],';')); }
 function exportFull(){ var rows=IC.buildFullRows(S,$('incZero').checked); if(!rows.length){ alert('Aucune ligne a exporter.'); return; }
-  var headers=S.headers.concat(['Quantité comptée','Emplacement affecté']); saveCsv('Inventaire_complet_'+todayTag()+'.csv', IC.toCSV(rows,headers,';')); }
+  var headers=S.headers.concat(['Quantité comptée','Emplacement affecté','Opérateur']); saveCsv('Inventaire_complet_'+fileTag()+'.csv', IC.toCSV(withOperator(rows),headers,';')); }
 function exportGaps(){
   var hasTheo = !!(S.theo && S.theo.some(function(v){ return v; }));
   if(!hasTheo && !confirm('Aucune quantite theorique importee (colonne stock au chargement du fichier). L ecart sera calcule par rapport a 0. Continuer ?')) return;
   var rows=IC.buildGapRows(S,{produitSource:S.produitSource});
   if(!rows.length){ alert('Aucun ecart constate entre le fichier et le comptage.'); return; }
   var gs=IC.gapStats(S);
-  saveCsv('Rapport_ecarts_'+todayTag()+'.csv', IC.toCSV(rows,['Produit','Code-barres','Désignation','Qté théorique','Qté comptée','Écart','Emplacement affecté'],';'))
+  saveCsv('Rapport_ecarts_'+fileTag()+'.csv', IC.toCSV(withOperator(rows),['Produit','Code-barres','Désignation','Qté théorique','Qté comptée','Écart','Emplacement affecté','Opérateur'],';'))
     .then(function(){ toast(gs.withGap+' ecart(s) : '+gs.plus+' en exces, '+gs.minus+' en manque'); });
 }
 /* Sauvegarde complete via la feuille de partage Android (Drive, mail, WhatsApp...).
@@ -392,7 +438,7 @@ function shareBackup(){
   flushSave().then(function(){
     if(FS && ShareP){
       return FS.getUri({ path:DOCS_SUB+'/'+DATA_FILE, directory:DIR_DOCS })
-        .then(function(u){ if(u&&u.uri) return ShareP.share({ title:'Sauvegarde SmartIDS', text:'Sauvegarde inventaire SmartIDS '+todayTag(), url:u.uri }); })
+        .then(function(u){ if(u&&u.uri) return ShareP.share({ title:'Sauvegarde SmartIDS', text:'Sauvegarde inventaire SmartIDS '+fileTag(), url:u.uri }); })
         .catch(function(){ toast('Partage indisponible'); });
     }
     var blob=new Blob([JSON.stringify(stateForSave())],{type:'application/json'});
@@ -414,7 +460,7 @@ function camStop(){ camRun=false; if(camStream){ camStream.getTracks().forEach(f
 /* ---------- Menu / reglages ---------- */
 function openMenu(){ $('mnuVer').textContent='SmartIDS Inventaire v'+APP_VERSION; $('menu').classList.remove('hide'); }
 function closeMenu(){ $('menu').classList.add('hide'); focusScan(); }
-function openSettings(){ applySettingsUI(); $('settings').classList.remove('hide'); }
+function openSettings(){ applySettingsUI(); $('setOp').value = S ? (S.operator||'') : (SET.lastOp||''); $('settings').classList.remove('hide'); }
 function closeSettings(){ $('settings').classList.add('hide'); focusScan(); }
 
 /* ---------- Nouvel inventaire ---------- */
@@ -426,9 +472,13 @@ $('file').addEventListener('change',function(e){ var f=e.target.files[0]; if(!f)
   readFile(f).then(function(p){ p._name=f.name.replace(/\.[^.]+$/,''); onParsed(p); }).catch(function(err){ alert('Erreur de lecture : '+err.message); }); });
 $('btnStart').addEventListener('click',startFromParsed);
 $('btnFree').addEventListener('click',startFreeCount);
+/* Saisie manuelle uniquement : en mode scanner, tout passe par wedgeCapture (document). */
 var suppressChange=false;
-$('scan').addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); var v=this.value; this.value=''; suppressChange=true; setTimeout(function(){suppressChange=false;},0); if(v.trim()) processScan(v); if(kbManual) setKbMode(false); } });
-$('scan').addEventListener('change',function(){ if(suppressChange){ suppressChange=false; this.value=''; return; } if(this.value.trim()){ var v=this.value; this.value=''; processScan(v); if(kbManual) setKbMode(false); } });
+$('scan').addEventListener('keydown',function(e){ if(!kbManual) return;
+  if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); var v=this.value; this.value=''; suppressChange=true; setTimeout(function(){suppressChange=false;},0); if(v.trim()) processScan(v); setKbMode(false); } });
+$('scan').addEventListener('change',function(){ if(!kbManual) return;
+  if(suppressChange){ suppressChange=false; this.value=''; return; } if(this.value.trim()){ var v=this.value; this.value=''; processScan(v); setKbMode(false); } });
+$('scan').addEventListener('click',function(){ if(!kbManual) setKbMode(true); });
 $('undo').addEventListener('click',doUndo);
 $('btnKb').addEventListener('click',function(){ setKbMode(!kbManual); });
 $('btnSetLoc').addEventListener('click',function(){ var c=prompt('Emplacement courant (ex : A-03-B). Astuce : scanne plutot l etiquette.', S.curLoc||''); if(c==null) return; c=IC.normLoc(c); if(c) setCurrentLocation(c); else { S.curLoc=''; jlog({k:'curloc',l:''}); updateLocBar(); saveSoon(); } focusScan(); });
@@ -450,11 +500,12 @@ $('setClose').addEventListener('click',closeSettings);
 $('settings').addEventListener('click',function(e){ if(e.target===this) closeSettings(); });
 $('setLoc').addEventListener('change',function(){ SET.locEnabled=this.checked; settingsSave(); applySettingsUI(); if(S){ render(); } });
 $('setAuto').addEventListener('change',function(){ SET.autoAdd=this.checked; settingsSave(); });
-document.addEventListener('click',function(e){ if(!S) return; if($('screenScan').classList.contains('hide')) return; if(!$('camWrap').classList.contains('hide')) return;
-  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide')) return;
-  var tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='button'||tag==='select'||tag==='a'||tag==='video') return; var el=$('scan'); if(el) setTimeout(function(){ try{el.focus();}catch(e){} },0); });
-$('scan').addEventListener('blur',function(){ var el=this; if(!$('screenScan').classList.contains('hide') && $('camWrap').classList.contains('hide')
-  && $('menu').classList.contains('hide') && $('settings').classList.contains('hide')) setTimeout(function(){ try{el.focus();}catch(e){} },120); });
+$('setOp').addEventListener('change',function(){ var op=this.value.trim(); if(!op) return;
+  SET.lastOp=op; settingsSave();
+  if(S && op!==S.operator){ S.operator=op; jlog({k:'op',l:op}); updateOpUI(); saveSoon(); toast('Operateur : '+op); } });
+/* (Les anciens re-focus automatiques du champ scan ont ete supprimes : ils avalaient
+   les taps sur les boutons sur certains PDA. La capture globale ne necessite aucun focus.) */
+$('scan').addEventListener('blur',function(){ if(kbManual) setKbMode(false); });
 
 /* Filets de securite: sauvegarde immediate quand l'app passe en arriere-plan / se ferme */
 window.addEventListener('pagehide', function(){ flushSave(); });
@@ -466,6 +517,7 @@ if(AppP && AppP.addListener){ AppP.addListener('pause', function(){ flushSave();
   document.querySelectorAll('.ver').forEach(function(el){ el.textContent='v'+APP_VERSION; });
   settingsLoad().then(function(){
     applySettingsUI();
+    if(SET.lastOp) $('mOp').value=SET.lastOp;
     return persistRead();
   }).then(function(res){
     var sv=res && res.sv;
