@@ -7,4 +7,4 @@ dist/
 key.properties
 *.log
 .DS_Store
-apk-build/
+apk-*/
