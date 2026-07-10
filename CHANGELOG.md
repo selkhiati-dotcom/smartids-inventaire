@@ -4,6 +4,14 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.1.3] — 2026-07-10
+
+### Corrigé
+- **Clavier fermé instantanément sur le champ « Opérateur »** (écran d'accueil) : le
+  masquage natif du clavier ne s'applique plus que sur l'écran de scan quand le focus
+  est sur le champ scan (ou aucun champ). Tous les autres champs — opérateur, recherche,
+  réglages, emplacement Odoo — gardent un clavier normal.
+
 ## [1.1.2] — 2026-07-10
 
 Compatibilité **vieux WebView de PDA** (app morte sur Honeywell ancien avec la 1.1.1).

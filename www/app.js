@@ -12,7 +12,7 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.1.2';
+var APP_VERSION = '1.1.3';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
 /* Compat vieux WebView (PDA) : NodeList n'a pas de .forEach avant Chrome 51 */
@@ -310,7 +310,15 @@ function updateOpUI(){ var el=$('sOp'); if(el) el.textContent=(S&&S.operator)?S.
 var kbManual=false;
 var KBP = PL.Keyboard;
 if(KBP && KBP.addListener){
-  KBP.addListener('keyboardDidShow', function(){ if(!kbManual && KBP.hide){ KBP.hide()['catch'](function(){}); } });
+  KBP.addListener('keyboardDidShow', function(){
+    if(kbManual || !KBP.hide) return;
+    /* Ne masquer le clavier QUE pour le champ scan en mode lecteur. Tous les autres
+       champs (operateur, recherche, reglages, emplacement...) y ont droit. */
+    if(!S || $('screenScan').classList.contains('hide')) return;
+    var ae=document.activeElement||{}, tag=(ae.tagName||'').toLowerCase();
+    if((tag==='input'||tag==='textarea'||tag==='select') && ae.id!=='scan') return;
+    KBP.hide()['catch'](function(){});
+  });
 }
 function setKbMode(manual){
   kbManual=manual;
