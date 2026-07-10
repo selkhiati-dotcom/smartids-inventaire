@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b6e4f">
+<title>SmartIDS Inventaire</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <b>📦 Inventaire SmartIDS</b><span class="ver"></span><span class="sp"></span>
+  <button id="btnMenu">⋯</button>
+</header>
+
+<div class="wrap">
+
+  <!-- ECRAN 1 : IMPORT -->
+  <section id="screenImport">
+    <div class="card">
+      <h2>1 · Fichier de départ</h2>
+      <p class="muted">Charge ta liste produits (CSV ou Excel) : code-barres, désignation, référence, prix.</p>
+      <input type="file" id="file" accept=".csv,.xlsx,.xls,text/csv">
+      <div id="resume" class="hide"><button class="btn sec" id="btnResume"></button></div>
+      <button class="btn ghost" id="btnFree">▶ Comptage libre (sans fichier)</button>
+      <p class="muted center ver"></p>
+    </div>
+
+    <div class="card hide" id="mapCard">
+      <h2>2 · Colonnes détectées</h2>
+      <label>Colonne code-barres (scannée)</label><select id="mBarcode"></select>
+      <label>Colonne désignation</label><select id="mDesig"></select>
+      <label>Colonne référence interne</label><select id="mRef"></select>
+      <label>Colonne emplacement (si le fichier en contient déjà une)</label><select id="mLocCol"></select>
+      <label>Colonne quantité <b>théorique</b> / stock du fichier (pour le rapport d'écarts)</label><select id="mTheo"></select>
+      <label>Colonne quantite deja comptee (pour reprendre un export CSV)</label><select id="mQty"></select>
+      <label>Emplacement de stock de base (Odoo)</label>
+      <input id="mLoc" value="PLMX/Stock" placeholder="ex : PLMX/Stock ou WH/Stock">
+      <div class="chk"><input type="checkbox" id="mProdRef"><label for="mProdRef" style="margin:0">Exporter « Produit » par la <b>référence</b> au lieu du code-barres</label></div>
+      <p id="mapInfo" class="muted"></p>
+      <button class="btn" id="btnStart">Démarrer l'inventaire ▶</button>
+    </div>
+  </section>
+
+  <!-- ECRAN 2 : SCAN -->
+  <section id="screenScan" class="hide">
+
+    <div class="locbar" id="locbarWrap">
+      <div class="grow">
+        <span class="lb">📍 Emplacement courant</span>
+        <div class="lv" id="curLoc">— aucun —</div>
+      </div>
+      <button id="btnSetLoc">Définir</button>
+      <button id="btnClrLoc" class="clear">Effacer</button>
+    </div>
+
+    <div class="card">
+      <input id="scan" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scannez un code-barres…">
+      <div id="fb"><div class="big">Prêt à scanner</div><div class="sub">Scanne une étiquette d'emplacement, puis les produits.</div></div>
+    </div>
+
+    <div class="tools">
+      <button id="undo">↶ Annuler</button>
+      <button id="btnKb">⌨ Saisie</button>
+      <button id="btnCam" class="hide">📷 Caméra</button>
+    </div>
+
+    <div class="statline">
+      <span><b id="sUnits">0</b> unités</span>
+      <span><b id="sDist">0</b> réfs</span>
+      <span id="sLocWrap"><b id="sLoc">0</b> empl.</span>
+      <span><b id="sZero">0</b> à 0</span>
+    </div>
+
+    <div class="card">
+      <div class="listhead">
+        <input id="search" placeholder="🔎 Filtrer…">
+        <span class="pill" id="listCount"></span>
+      </div>
+      <div id="list"></div>
+    </div>
+    <div style="height:12px"></div>
+  </section>
+
+  <section id="camWrap" class="hide">
+    <div class="card">
+      <video id="cam" playsinline style="width:100%;border-radius:10px;background:#000"></video>
+      <button class="btn sec" id="btnCamStop">Fermer la caméra</button>
+    </div>
+  </section>
+</div>
+
+<!-- MENU -->
+<div class="overlay hide" id="menu">
+  <div class="sheet">
+    <h2>Exports</h2>
+    <div class="chk"><input type="checkbox" id="incZero"><label for="incZero" style="margin:0">Inclure les lignes à 0 (inventaire complet)</label></div>
+    <div class="chk" id="detLocRow"><input type="checkbox" id="detLoc"><label for="detLoc" style="margin:0">Export Odoo avec <b>emplacement détaillé</b> (base/étagère-bac)</label></div>
+    <div class="row2">
+      <button class="btn" id="btnExp">⬇ Export Odoo</button>
+      <button class="btn sec" id="btnGap">⚖ Écarts</button>
+    </div>
+    <div class="row2">
+      <button class="btn sec" id="btnExpLoc">⬇ Emplacements</button>
+      <button class="btn ghost" id="btnExpFull">⬇ Export complet</button>
+    </div>
+    <h2 style="margin-top:16px">Application</h2>
+    <button class="btn sec" id="mnuBackup">☁ Sauvegarder (Drive, mail…)</button>
+    <button class="btn sec" id="mnuSettings">⚙ Réglages</button>
+    <button class="btn ghost" id="mnuNew">🗑 Nouvel inventaire</button>
+    <button class="btn ghost" id="mnuClose">Fermer</button>
+    <p class="muted center" id="mnuVer"></p>
+  </div>
+</div>
+
+<!-- REGLAGES -->
+<div class="overlay hide" id="settings">
+  <div class="sheet">
+    <h2>Réglages</h2>
+    <div class="chk"><input type="checkbox" id="setLoc"><label for="setLoc" style="margin:0">Gestion des <b>emplacements</b> (étiquettes LOC-…)</label></div>
+    <div class="chk"><input type="checkbox" id="setAuto"><label for="setAuto" style="margin:0">Ajouter <b>automatiquement</b> les codes absents du fichier</label></div>
+    <p class="muted">Sauvegarde continue : chaque scan est journalisé puis écrit dans un fichier local
+      (+ copie <b>Documents/SmartIDS</b> et instantanés dans <b>Documents/SmartIDS/backups</b>).
+      Le bouton ☁ Sauvegarder du menu permet d'envoyer une copie vers Google Drive, un mail, etc.</p>
+    <button class="btn" id="setClose">OK</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="inv_core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

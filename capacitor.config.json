@@ -1,0 +1,9 @@
+{
+  "appId": "ma.syn.smartids.inventaire",
+  "appName": "SmartIDS Inventaire",
+  "webDir": "www",
+  "backgroundColor": "#0f1115",
+  "android": {
+    "allowMixedContent": true
+  }
+}

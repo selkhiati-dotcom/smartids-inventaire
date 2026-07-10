@@ -1,0 +1,44 @@
+name: AAB release (Play Console)
+# Genere un Android App Bundle SIGNE, pret a televerser sur Google Play Console.
+# Prerequis : creer 4 secrets GitHub (Settings > Secrets and variables > Actions) :
+#   KEYSTORE_BASE64   = ta cle de signature encodee en base64
+#   KEYSTORE_PASSWORD = mot de passe du keystore
+#   KEY_ALIAS         = alias de la cle
+#   KEY_PASSWORD      = mot de passe de la cle
+# (voir README, section Play Console, pour generer la cle.)
+on:
+  workflow_dispatch:
+  push:
+    tags: [ 'v*' ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - run: yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" || true
+      - run: npm install
+      - run: npx cap add android
+      - run: npx capacitor-assets generate --android || true
+      - run: npx cap sync android
+      - name: Restaurer la cle de signature
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/upload.keystore
+      - name: Compiler l'AAB signe
+        run: |
+          cd android && chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.version.code=${{ github.run_number }} \
+            -Pandroid.injected.version.name=1.0.${{ github.run_number }} \
+            -Pandroid.injected.signing.store.file=$(pwd)/upload.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartIDS-AAB-release
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error

@@ -1,0 +1,24 @@
+{
+  "name": "smartids-inventaire",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Application d'inventaire par scan (PDA / telephone) - SmartIDS / Boatshop",
+  "scripts": {
+    "sync": "cap sync android",
+    "icons": "capacitor-assets generate --android",
+    "add:android": "cap add android",
+    "build:apk": "cd android && ./gradlew assembleDebug",
+    "build:aab": "cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/share": "^6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.2"
+  }
+}
