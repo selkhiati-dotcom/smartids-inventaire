@@ -12,7 +12,7 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.2.1';
+var APP_VERSION = '1.2.2';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
 /* Compat vieux WebView (PDA) : NodeList n'a pas de .forEach avant Chrome 51 */
@@ -42,17 +42,15 @@ var SNAP_SUB = 'SmartIDS/backups';
 var SNAP_EVERY_MS = 10*60*1000;
 
 /* ---------- Reglages (persistes, independants de l'inventaire) ---------- */
-/* scanMode : 'field' = lecteur qui INSERE le texte dans le champ focalise (defaut,
-   cas des PDA en wedge standard) ; 'keys' = lecteur configure pour emettre de vraies
-   touches ("Wedge as keys" Honeywell / DataWedge Zebra) — aucun champ focalise requis,
-   c'est le mode le plus fiable. */
-var SET = { locEnabled:true, autoAdd:true, lastOp:'', scanMode:'field' };
+/* NB : l'ancien reglage scanMode (v1.1.4-1.2.1) a ete supprime — il rendait le scan
+   muet si "Wedge as keys" n'etait pas actif cote PDA. Les deux types de lecteurs
+   (touches clavier ET insertion IME) sont geres simultanement, sans reglage. */
+var SET = { locEnabled:true, autoAdd:true, lastOp:'' };
 function settingsLoad(){
   function apply(o){ if(o && typeof o==='object'){
     if(typeof o.locEnabled==='boolean') SET.locEnabled=o.locEnabled;
     if(typeof o.autoAdd==='boolean') SET.autoAdd=o.autoAdd;
-    if(typeof o.lastOp==='string') SET.lastOp=o.lastOp;
-    if(o.scanMode==='keys'||o.scanMode==='field') SET.scanMode=o.scanMode; } }
+    if(typeof o.lastOp==='string') SET.lastOp=o.lastOp; } }
   if(FS){
     return FS.readFile({ path:SETTINGS_FILE, directory:DIR_DATA, encoding:ENC })
       .then(function(r){ try{ apply(JSON.parse(typeof r.data==='string'?r.data:'')); }catch(e){} })
@@ -335,7 +333,6 @@ var kbHideLast=0;
 if(KBP && KBP.addListener){
   KBP.addListener('keyboardDidShow', function(){
     if(kbManual || !KBP.hide) return;
-    if(SET.scanMode!=='field') return;
     if(!S || $('screenScan').classList.contains('hide')) return;
     if(!$('diag').classList.contains('hide')) return;
     var ae=document.activeElement||{}, tag=(ae.tagName||'').toLowerCase();
@@ -375,9 +372,9 @@ function wedgeCapture(e){
   }
 }
 document.addEventListener('keydown', wedgeCapture, true);
-/* Focus du champ scan : uniquement en mode 'field' (insertion IME). En mode 'keys',
-   AUCUN focus — la capture globale suffit et on ne reveille jamais le clavier. */
-function focusScan(){ if(kbManual || SET.scanMode!=='field') return; var el=$('scan');
+/* Focus du champ scan (necessaire aux lecteurs a insertion IME ; les lecteurs a
+   touches passent par wedgeCapture qui n'a pas besoin de focus). */
+function focusScan(){ if(kbManual) return; var el=$('scan');
   if(el && !$('screenScan').classList.contains('hide') && $('camWrap').classList.contains('hide')
      && document.activeElement!==el){ try{ el.focus(); }catch(e){} } }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -471,7 +468,6 @@ function applySettingsUI(){
   each(['locbarWrap','sLocWrap','detLocRow','btnExpLoc'],function(id){ var el=$(id); if(el) el.classList.toggle('hide',!on); });
   var sl=$('setLoc'); if(sl) sl.checked=on;
   var sa=$('setAuto'); if(sa) sa.checked=SET.autoAdd;
-  var sm=$('setScanMode'); if(sm) sm.value=SET.scanMode;
 }
 
 /* ---------- Exports (ecriture FICHIER + partage) ---------- */
@@ -532,17 +528,16 @@ function shareBackup(){
    Secours web (BarcodeDetector + getUserMedia) pour les appareils sans Play Services. */
 var MLScan = PL.BarcodeScanner;
 function isNative(){ try{ return typeof CAP.isNativePlatform==='function' ? CAP.isNativePlatform() : !!CAP.isNative; }catch(e){ return false; } }
-var mlLoop=false;
-function mlScanLoop(){
+/* UN appui = UN scan (pas de rafale : plusieurs codes cote a cote declenchaient des
+   lectures en cascade). L'interface Google se ferme apres chaque code lu. */
+function mlScanOnce(){
   MLScan.scan().then(function(r){
     var codes=(r && r.barcodes) || [];
     if(codes.length){
       var v=codes[0].rawValue || codes[0].displayValue || '';
       if(v) processScan(String(v));
-      if(mlLoop) setTimeout(mlScanLoop, 300);   /* scan suivant */
-    } else { mlLoop=false; }
+    }
   })['catch'](function(err){
-    mlLoop=false;
     var msg=String((err && err.message) || err || '');
     if(/module/i.test(msg) && MLScan.installGoogleBarcodeScannerModule){
       toast('Installation du module de scan Google… reessaie dans quelques secondes');
@@ -551,7 +546,7 @@ function mlScanLoop(){
   });
 }
 function camStart(){
-  if(MLScan && isNative()){ if(mlLoop) return; mlLoop=true; mlScanLoop(); return; }
+  if(MLScan && isNative()){ mlScanOnce(); return; }
   camStartWeb();
 }
 var camStream=null, camRun=false, det=null;
@@ -561,7 +556,7 @@ function camStartWeb(){ if(!('BarcodeDetector' in window)) return;
   navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(st){ camStream=st; var v=$('cam'); v.srcObject=st; v.play(); camRun=true; loop(); })
     .catch(function(){ toast('Camera refusee'); $('camWrap').classList.add('hide'); });
   function loop(){ if(!camRun) return; det.detect($('cam')).then(function(codes){ if(codes&&codes.length){ var c=codes[0].rawValue, now=Date.now(); if(!(c===lastScan.code && now-lastScan.t<1200)){ lastScan={code:c,t:now}; processScan(c); } } }).catch(function(){}).then(function(){ if(camRun) requestAnimationFrame(loop); }); } }
-function camStop(){ mlLoop=false; camRun=false; if(camStream){ each(camStream.getTracks(),function(t){t.stop();}); camStream=null;} $('camWrap').classList.add('hide'); focusScan(); }
+function camStop(){ camRun=false; if(camStream){ each(camStream.getTracks(),function(t){t.stop();}); camStream=null;} $('camWrap').classList.add('hide'); focusScan(); }
 
 /* ---------- Menu / reglages ---------- */
 function openMenu(){ $('mnuVer').textContent='SmartIDS Inventaire v'+APP_VERSION; $('menu').classList.remove('hide'); }
@@ -623,16 +618,13 @@ $('setAuto').addEventListener('change',function(){ SET.autoAdd=this.checked; set
 $('setOp').addEventListener('change',function(){ var op=this.value.trim(); if(!op) return;
   SET.lastOp=op; settingsSave();
   if(S && op!==S.operator){ S.operator=op; jlog({k:'op',l:op}); updateOpUI(); saveSoon(); toast('Operateur : '+op); } });
-$('setScanMode').addEventListener('change',function(){ SET.scanMode=this.value; settingsSave();
-  if(SET.scanMode==='keys'){ try{ $('scan').blur(); }catch(e){} } else { focusScan(); }
-  toast(SET.scanMode==='keys'?'Mode touches clavier (Wedge as keys)':'Mode champ focalise'); });
 $('btnDiag').addEventListener('click',openDiag);
 $('diagClose').addEventListener('click',closeDiag);
 $('diagClear').addEventListener('click',function(){ $('diagLog').innerHTML=''; });
 /* Re-focus doux du champ scan (chemin IME, mode 'field' seulement) : sur tap d'une
    zone NON interactive, throttle 800 ms, jamais de boucle blur->focus. */
 var refocusLast=0;
-document.addEventListener('click',function(e){ if(!S || kbManual || SET.scanMode!=='field') return;
+document.addEventListener('click',function(e){ if(!S || kbManual) return;
   if($('screenScan').classList.contains('hide')) return;
   if(!$('camWrap').classList.contains('hide')) return;
   if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide') || !$('diag').classList.contains('hide')) return;

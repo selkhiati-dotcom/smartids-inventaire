@@ -1,6 +1,6 @@
 {
   "name": "smartids-inventaire",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "description": "Application d'inventaire par scan (PDA / telephone) - SmartIDS / Boatshop",
   "scripts": {

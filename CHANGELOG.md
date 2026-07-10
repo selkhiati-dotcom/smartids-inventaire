@@ -4,6 +4,17 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.2.2] — 2026-07-10
+
+### Corrigé
+- **Scan PDA muet** : suppression du réglage « Mode lecteur » (v1.1.4) — en mode
+  « Touches clavier » sans Wedge as keys actif côté appareil, le champ n'était plus
+  focalisé et les scans partaient dans le vide. Les deux types de lecteurs (touches
+  clavier ET insertion IME) sont désormais gérés **simultanément, sans réglage**.
+- **Caméra téléphone : 1 appui = 1 scan** — plus de relance automatique (avec plusieurs
+  codes côte à côte, la rafale déclenchait des lectures en cascade). L'interface Google
+  se ferme après chaque code lu ; on rappuie sur 📷 pour le suivant.
+
 ## [1.2.1] — 2026-07-10
 
 ### Corrigé

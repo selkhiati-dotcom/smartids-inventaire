@@ -30,11 +30,12 @@ un moteur JavaScript déjà éprouvé par des tests.
   pas de `file.text()`/`arrayBuffer()` (→ `FileReader`), pas de `NodeList.forEach`
   (→ helper `each()`), pas de `Array.from`/`Set` en dédup, pas de `inset` CSS.
   Un `window.onerror` affiche toute erreur JS dans le bandeau `#err` — le garder.
-- **Scan / clavier (v1.1.4)** : TROIS chemins de scan dans `www/app.js` — (1) `wedgeCapture`
+- **Scan / clavier (v1.2.2)** : TROIS chemins de scan dans `www/app.js` — (1) `wedgeCapture`
   keydown global pour les lecteurs à vrais événements clavier ; (2) champ `#scan` focalisé
   (PAS readonly !) pour les lecteurs qui insèrent le texte façon IME : traité sur Entrée,
-  `change`, ou 150 ms d'inactivité ; (3) bouton « ⌨ Saisie » manuel. Réglage `scanMode` :
-  'field' (défaut, focus + IME) / 'keys' (« Wedge as keys » Honeywell : AUCUN focus).
+  `change`, ou 150 ms d'inactivité ; (3) bouton « ⌨ Saisie » manuel. Les chemins 1 et 2 sont
+  TOUJOURS actifs simultanément — ne pas réintroduire de réglage de mode (v1.1.4-1.2.1 : un
+  mode « sans focus » rendait le scan muet si l'appareil n'était pas configuré en face).
   RÈGLES DURES apprises sur le terrain : jamais de boucle `Keyboard.hide()` sur
   keyboardDidShow (tempête native↔JS qui FIGE LE TACTILE — d'où l'anti-tempête 2,5 s),
   jamais de boucle blur→refocus, jamais de readonly sur `#scan`. Un écran « 🔧 Diagnostic
