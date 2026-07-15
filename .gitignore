@@ -8,3 +8,7 @@ key.properties
 *.log
 .DS_Store
 apk-*/
+exe-*/
+desktop/www/
+desktop/build/
+desktop/dist/

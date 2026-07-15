@@ -12,7 +12,7 @@
    journal (actions plus recentes que la derniere sauvegarde). */
 (function(){
 'use strict';
-var APP_VERSION = '1.2.2';
+var APP_VERSION = '1.3.0';
 var IC = window.InvCore;
 var $ = function(id){ return document.getElementById(id); };
 /* Compat vieux WebView (PDA) : NodeList n'a pas de .forEach avant Chrome 51 */
@@ -357,7 +357,7 @@ function wedgeCapture(e){
   if(!S || kbManual) return;
   if($('screenScan').classList.contains('hide')) return;
   if(!$('camWrap').classList.contains('hide')) return;
-  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide')) return;
+  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide') || !$('locModal').classList.contains('hide')) return;
   var t=e.target||{}, tag=(t.tagName||'').toLowerCase();
   if(t.id==='search') return;
   if((tag==='input'||tag==='select'||tag==='textarea') && t.id!=='scan') return;
@@ -596,7 +596,17 @@ $('scan').addEventListener('input',function(){
 });
 $('undo').addEventListener('click',doUndo);
 $('btnKb').addEventListener('click',function(){ setKbMode(!kbManual); });
-$('btnSetLoc').addEventListener('click',function(){ var c=prompt('Emplacement courant (ex : A-03-B). Astuce : scanne plutot l etiquette.', S.curLoc||''); if(c==null) return; c=IC.normLoc(c); if(c) setCurrentLocation(c); else { S.curLoc=''; jlog({k:'curloc',l:''}); updateLocBar(); saveSoon(); } focusScan(); });
+/* Boite emplacement manuel (prompt() n'existe pas sous Electron) */
+$('btnSetLoc').addEventListener('click',function(){ $('locIn').value=S.curLoc||''; $('locModal').classList.remove('hide');
+  setTimeout(function(){ try{ $('locIn').focus(); }catch(e){} },100); });
+function locModalOk(){ var c=IC.normLoc($('locIn').value);
+  $('locModal').classList.add('hide');
+  if(c) setCurrentLocation(c); else { S.curLoc=''; jlog({k:'curloc',l:''}); updateLocBar(); saveSoon(); toast('Emplacement courant efface'); }
+  focusScan(); }
+$('locOk').addEventListener('click',locModalOk);
+$('locIn').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); locModalOk(); } });
+$('locCancel').addEventListener('click',function(){ $('locModal').classList.add('hide'); focusScan(); });
+$('locModal').addEventListener('click',function(e){ if(e.target===this){ this.classList.add('hide'); focusScan(); } });
 $('btnClrLoc').addEventListener('click',function(){ S.curLoc=''; jlog({k:'curloc',l:''}); updateLocBar(); saveSoon(); toast('Emplacement courant efface'); focusScan(); });
 $('search').addEventListener('input',function(){ clearTimeout(filterTimer); filterTimer=setTimeout(render,150); });
 $('btnExp').addEventListener('click',function(){ closeMenu(); exportOdoo(); });
@@ -627,7 +637,7 @@ var refocusLast=0;
 document.addEventListener('click',function(e){ if(!S || kbManual) return;
   if($('screenScan').classList.contains('hide')) return;
   if(!$('camWrap').classList.contains('hide')) return;
-  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide') || !$('diag').classList.contains('hide')) return;
+  if(!$('menu').classList.contains('hide') || !$('settings').classList.contains('hide') || !$('diag').classList.contains('hide') || !$('locModal').classList.contains('hide')) return;
   var tag=(e.target.tagName||'').toLowerCase();
   if(tag==='input'||tag==='button'||tag==='select'||tag==='a'||tag==='video'||tag==='label') return;
   var now=Date.now(); if(now-refocusLast<800) return; refocusLast=now;

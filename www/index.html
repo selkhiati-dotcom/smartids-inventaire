@@ -140,6 +140,19 @@
   </div>
 </div>
 
+<!-- EMPLACEMENT MANUEL (remplace prompt(), non supporte par Electron) -->
+<div class="overlay hide" id="locModal">
+  <div class="sheet">
+    <h2>Emplacement courant</h2>
+    <input id="locIn" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ex : A-03-B (vide = effacer)">
+    <p class="muted">Astuce : scanne plutôt l'étiquette d'emplacement (code LOC-…).</p>
+    <div class="row2">
+      <button class="btn sec" id="locCancel">Annuler</button>
+      <button class="btn" id="locOk">Définir</button>
+    </div>
+  </div>
+</div>
+
 <!-- DIAGNOSTIC SCAN -->
 <div class="overlay hide" id="diag">
   <div class="sheet">

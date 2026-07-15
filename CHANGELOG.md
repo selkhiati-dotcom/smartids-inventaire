@@ -4,6 +4,20 @@ Format : [SemVer](https://semver.org/lang/fr/). La version applicative est défi
 `www/app.js` (`APP_VERSION`) et `package.json`, et affichée dans l'app (en-tête, écran
 d'import, menu). Le `versionCode` Android est auto-incrémenté par la CI à chaque build AAB.
 
+## [1.3.0] — 2026-07-10
+
+### Ajouté
+- **Version Windows (.exe)** : wrapper Electron dans `desktop/` chargeant le même `www/`
+  que l'app Android. Installateur NSIS construit par la CI (workflow « EXE Windows »,
+  artefact `SmartIDS-EXE`). Persistance équivalente à Android via un pont
+  `Capacitor.Plugins.Filesystem` → fichiers Windows : état/journal/.bak dans
+  `%APPDATA%\SmartIDS-Inventaire`, copie visible + exports + instantanés dans
+  `Documents\SmartIDS`. Douchettes USB en mode clavier gérées nativement (vraies touches).
+
+### Modifié
+- Le bouton « Définir » (emplacement manuel) utilise une vraie boîte de dialogue au lieu
+  de `prompt()` (non supporté par Electron ; plus confortable sur PDA aussi).
+
 ## [1.2.2] — 2026-07-10
 
 ### Corrigé

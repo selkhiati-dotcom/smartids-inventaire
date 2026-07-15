@@ -1,0 +1,29 @@
+name: EXE Windows (installateur)
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Preparer les sources (www + icone)
+        shell: bash
+        run: |
+          rm -rf desktop/www desktop/build desktop/dist
+          mkdir -p desktop/build
+          cp -r www desktop/www
+          cp resources/icon.png desktop/build/icon.png
+      - run: npm install
+        working-directory: desktop
+      - name: Construire l'installateur NSIS
+        run: npx electron-builder --win nsis --publish never
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartIDS-EXE
+          path: desktop/dist/*.exe
+          if-no-files-found: error

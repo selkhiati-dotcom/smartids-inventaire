@@ -63,6 +63,8 @@ un moteur JavaScript déjà éprouvé par des tests.
 | `resources/icon.png` | icône source 1024px (génère les icônes via `npx capacitor-assets generate`) |
 | `.github/workflows/build-apk.yml` | build APK debug (test) |
 | `.github/workflows/build-aab.yml` | build AAB signé pour Google Play Console |
+| `desktop/` | version Windows : wrapper Electron (main.js + preload.js qui émule `Capacitor.Plugins.Filesystem` sur fs Node — DATA→%APPDATA%\SmartIDS-Inventaire, DOCUMENTS→Documents). ATTENTION : pas de `prompt()` dans www/ (non supporté par Electron) |
+| `.github/workflows/build-exe.yml` | installateur Windows NSIS (artefact SmartIDS-EXE) |
 
 Le dossier natif `android/` n'est **pas** versionné : il est généré à la volée par
 `npx cap add android` (en local et en CI). Ne pas le committer.
